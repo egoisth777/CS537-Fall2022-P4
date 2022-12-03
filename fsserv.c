@@ -8,7 +8,14 @@
 #include "ufs.h"
 
 #define BUFFER_SIZE (1000)
+#define BLOCK_SIZE (4096)
 
+// Important variables:
+// super_t superBlock
+// char* inode_bitmap
+// char* data_bitmap
+// char* inode_table
+// char* data_region
 int main(int argc, char const *argv[])
 {
     // Get length of the argument
@@ -44,10 +51,10 @@ int main(int argc, char const *argv[])
     // Read-in the super block
     int fileImageFileDescriptor = open(fileImage, O_RDWR);
     int* buf = malloc(sizeof(int) * 1024); // assume int is 4-byte size
-    ssize_t numRead = read(fileImageFileDescriptor, buf, 4096); // read first 4096 bytes (super block)
+    ssize_t numRead = read(fileImageFileDescriptor, buf, BLOCK_SIZE); // read first 4096 bytes (super block)
     super_t superBlock;
 
-    if (numRead == 4096) {
+    if (numRead == BLOCK_SIZE) {
         superBlock.inode_bitmap_addr = buf[0];
         superBlock.inode_bitmap_len = buf[1];
         superBlock.data_bitmap_addr = buf[2];
@@ -61,8 +68,29 @@ int main(int argc, char const *argv[])
     free(buf);
 
     // Sanity check
-    printf("superBlock info\n inode_bitmap_addr: %d\n inode_bitmap_len: %d\n data_bitmap_addr: %d\n data_bitmap_len: %d\n data_region_addr: %d\n data_region_len: %d\n",
-     superBlock.inode_bitmap_addr, superBlock.inode_bitmap_len, superBlock.data_bitmap_addr, superBlock.data_bitmap_len, superBlock.data_region_addr, superBlock.data_region_len);
+    printf("superBlock info\n inode_bitmap_addr: %d\n inode_bitmap_len: %d\n data_bitmap_addr: %d\n data_bitmap_len: %d\n inode_region_addr: %d\n inode_region_len: %d\n data_region_addr: %d\n data_region_len: %d\n",
+     superBlock.inode_bitmap_addr, superBlock.inode_bitmap_len, superBlock.data_bitmap_addr, superBlock.data_bitmap_len, superBlock.inode_region_addr, superBlock.inode_region_len, superBlock.data_region_addr, superBlock.data_region_len);
+
+    // Read-in the bitmaps
+    char* inode_bitmap = malloc(sizeof(char) * BLOCK_SIZE * superBlock.inode_bitmap_len);
+    char* data_bitmap = malloc(sizeof(char) * BLOCK_SIZE * superBlock.data_bitmap_len);
+
+    lseek(fileImageFileDescriptor, BLOCK_SIZE * superBlock.inode_bitmap_addr, SEEK_SET);
+    ssize_t numReadInodeBitmap = read(fileImageFileDescriptor, inode_bitmap, BLOCK_SIZE * superBlock.inode_bitmap_len);
+    lseek(fileImageFileDescriptor, BLOCK_SIZE * superBlock.data_bitmap_addr, SEEK_SET);
+    ssize_t numReadDataBitmap = read(fileImageFileDescriptor, data_bitmap, BLOCK_SIZE * superBlock.data_bitmap_len);
+
+    // Read-in the inode table
+    char* inode_table = malloc(sizeof(char) * BLOCK_SIZE * superBlock.inode_region_len);
+
+    lseek(fileImageFileDescriptor, BLOCK_SIZE * superBlock.inode_region_addr, SEEK_SET);
+    ssize_t numReadInodeTable = read(fileImageFileDescriptor, inode_table, BLOCK_SIZE * superBlock.inode_region_len);
+
+    // Read-in the data region
+    char* data_region = malloc(sizeof(char) * BLOCK_SIZE * superBlock.data_region_len);
+
+    lseek(fileImageFileDescriptor, BLOCK_SIZE * superBlock.data_region_addr, SEEK_SET);
+    ssize_t numReadDataRegion = read(fileImageFileDescriptor, data_region, BLOCK_SIZE * superBlock.data_region_len);
 
     // Start the server
     
