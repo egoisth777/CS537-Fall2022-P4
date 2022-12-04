@@ -100,6 +100,7 @@ int main(int argc, char const *argv[])
 	printf("The Machine:: waiting...\n");
 	int rc = UDP_Read(sd, &addr, message, BUFFER_SIZE);
 	printf("The Machine:: read message [size:%d contents:(%s)]\n", rc, message);
+    
 	if (rc > 0) {
             char reply[BUFFER_SIZE];
             sprintf(reply, "goodbye world");

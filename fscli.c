@@ -7,8 +7,35 @@
 #include "udp.h"
 #include "ufs.h"
 
+#define BUFFER_SIZE (1000)
+
+int initialized = 0;
+char* host;
+int portNum;
+struct sockaddr_in addrSnd, addrRcv;
+int sd = 0;
+
 int MFS_Init(char *hostname, int port)
 {
+    sd = UDP_Open(20000);
+    int rc = UDP_FillSockAddr(&addrSnd, hostname, port);
+
+    char message[BUFFER_SIZE];
+    sprintf(message, "TOMACHINE,initialization");
+
+    printf("Client Initalizing :: [%s]\n", message);
+    rc = UDP_Write(sd, &addrSnd, message, BUFFER_SIZE);
+    while (rc < 0) {
+        printf("Client :: failed to send, retrying\n");
+        exit(1);
+    }
+
+    printf("client:: wait for reply...\n");
+    rc = UDP_Read(sd, &addrRcv, message, BUFFER_SIZE);
+    printf("client:: got reply [size:%d contents:(%s)\n", rc, message);
+    initialized = 1;
+    host = hostname;
+    portNum = port;
     return 0;
 }
 int MFS_Lookup(int pinum, char *name)
