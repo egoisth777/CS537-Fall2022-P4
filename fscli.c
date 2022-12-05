@@ -58,7 +58,15 @@ int MFS_Lookup(int pinum, char *name)
 }
 int MFS_Stat(int inum, MFS_Stat_t *m)
 {
-    return 0;
+    char message[BUFFER_SIZE];
+    sprintf(message, "TOMACHINE~MFS_Stat~%d~%d", inum, m);
+    printf("client stats :: [%s]\n", message);
+    int rc;
+    rc = UDP_Write(sd, &addrSnd, message, BUFFER_SIZE);
+    printf("client:: wait for reply...\n");
+    rc = UDP_Read(sd, &addrRcv, message, BUFFER_SIZE);
+    printf("client:: got reply [size:%d contents:(%s)\n", rc, message);
+    return atoi(message);
 }
 int MFS_Write(int inum, char *buffer, int offset, int nbytes)
 {

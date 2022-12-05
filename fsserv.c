@@ -12,6 +12,21 @@
 
 #define SPLITTER "~"
 
+int checkIfInumValid(int inum, int numInode, char* inode_bitmap) {
+    // Check if the bitmap's perspective agrees. If the allocated bit is 1.
+    int bitmapOffsetNum = inum / 8;
+    int bitmapOffset = inum % 8;
+    if (inum >= numInode || ((inode_bitmap[bitmapOffsetNum]) & (0x80 >> bitmapOffset) == 0))
+        return -1;
+    return 0;
+}
+
+void respondToServer(char** reply, int replyNum, int sd, struct sockaddr_in *addr, int* rc) {
+    sprintf(*reply, "%d", replyNum);
+    *rc = UDP_Write(sd, addr, *reply, BUFFER_SIZE);
+    printf("The Machine:: reply\n");
+}
+
 // Important variables:
 // int fileImageFileDescriptor = open(fileImage, O_RDWR);
 // super_t superBlock
@@ -137,34 +152,46 @@ int main(int argc, char const *argv[])
             int pinum = atoi(keys[2]);
             char* name = keys[3];
 
-            inode_t parent = inode_table_struct[pinum];
-            int found = 0;
-            for(int i = 0; i < DIRECT_PTRS; i ++)
+            if (checkIfInumValid(pinum, numInode, inode_bitmap) == -1)
             {
-                unsigned int curr = parent.direct[i];
-                char currName[28];
-                char* namePosition = data_region + (BLOCK_SIZE * curr);
-                memcpy(&currName, namePosition, 28);
-                int* inumPtr = (int *) (data_region + (BLOCK_SIZE * curr) + 28 * sizeof(char));
-
-                if (strcmp(currName, name) == 0)
+                respondToServer(&reply, -1, sd, &addr, &rc);
+            }else {
+                inode_t parent = inode_table_struct[pinum];
+                int found = 0;
+                for(int i = 0; i < DIRECT_PTRS; i ++)
                 {
-                    found = 1;
-                    sprintf(reply, "%d", &inumPtr);
-                    rc = UDP_Write(sd, &addr, reply, BUFFER_SIZE);
-                    printf("The Machine:: reply\n");
-                    break;
+                    unsigned int curr = parent.direct[i];
+                    char currName[28];
+                    char* namePosition = data_region + (BLOCK_SIZE * curr);
+                    memcpy(&currName, namePosition, 28);
+                    int* inumPtr = (int *) (data_region + (BLOCK_SIZE * curr) + 28 * sizeof(char));
+
+                    if (strcmp(currName, name) == 0)
+                    {
+                        found = 1;
+                        respondToServer(&reply, &inumPtr, sd, &addr, &rc);
+                        break;
+                    }
                 }
-            }
-            if (found == 0) {
-                sprintf(reply, "-1");
-                rc = UDP_Write(sd, &addr, reply, BUFFER_SIZE);
-                printf("The Machine:: reply\n");
+                if (found == 0)
+                    respondToServer(&reply, -1, sd, &addr, &rc);
             }
 
         }else if (strcmp(keys[1], "MFS_Stat") == 0)
         {
-            
+            int inum = atoi(keys[2]);
+            MFS_Stat_t *m = (MFS_Stat_t *) atoi(keys[3]);
+
+            if (checkIfInumValid(inum, numInode, inode_bitmap) == -1)
+            {
+                respondToServer(&reply, -1, sd, &addr, &rc);
+            }else {
+                inode_t information = inode_table_struct[inum];
+                m->size = information.size;
+                m->type = information.type;
+                respondToServer(&reply, 0, sd, &addr, &rc);
+            }
+
         }else if (strcmp(keys[1], "MFS_Write") == 0)
         {
             
