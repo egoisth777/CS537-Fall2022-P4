@@ -21,9 +21,9 @@ int MFS_Init(char *hostname, int port)
     int rc = UDP_FillSockAddr(&addrSnd, hostname, port);
 
     char message[BUFFER_SIZE];
-    sprintf(message, "TOMACHINE,initialization");
+    sprintf(message, "TOMACHINE~MFS_Init");
 
-    printf("Client Initalizing :: [%s]\n", message);
+    printf("client Initalizing :: [%s]\n", message);
     rc = UDP_Write(sd, &addrSnd, message, BUFFER_SIZE);
     while (rc < 0) {
         printf("Client :: failed to send, retrying\n");
@@ -33,10 +33,16 @@ int MFS_Init(char *hostname, int port)
     printf("client:: wait for reply...\n");
     rc = UDP_Read(sd, &addrRcv, message, BUFFER_SIZE);
     printf("client:: got reply [size:%d contents:(%s)\n", rc, message);
-    initialized = 1;
-    host = hostname;
-    portNum = port;
-    return 0;
+    if (strcmp(message, "init success!") == 0)
+    {
+        initialized = 1;
+        host = hostname;
+        portNum = port;
+        return 0;
+    }else {
+        // TODO RETRY
+    }
+    
 }
 int MFS_Lookup(int pinum, char *name)
 {
@@ -64,11 +70,27 @@ int MFS_Unlink(int pinum, char *name)
 }
 int MFS_Shutdown()
 {
+    char message[BUFFER_SIZE];
+    printf("client signaling remote to shutdown :: [%s]\n", message);
+    sprintf(message, "TOMACHINE~MFS_Shutdown");
+    int rc;
+    rc = UDP_Write(sd, &addrSnd, message, BUFFER_SIZE);
+    printf("client:: wait for reply...\n");
+    rc = UDP_Read(sd, &addrRcv, message, BUFFER_SIZE);
+    printf("client:: got reply [size:%d contents:(%s)\n", rc, message);
+    if (strcmp(message, "stopping!") == 0)
+        return 0;
+    else {
+        // TODO RETRY
+    }
     return 0;
 }
 
 int main(int argc, char const *argv[])
 {
     printf("Fuck you World!\n");
+    MFS_Init("localhost", 3000);
+    sleep(5);
+    MFS_Shutdown();
     return 0;
 }

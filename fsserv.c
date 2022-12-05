@@ -10,7 +10,10 @@
 #define BUFFER_SIZE (1000)
 #define BLOCK_SIZE (4096)
 
+#define SPLITTER "~"
+
 // Important variables:
+// int fileImageFileDescriptor = open(fileImage, O_RDWR);
 // super_t superBlock
 // char* inode_bitmap
 // char* data_bitmap
@@ -100,12 +103,51 @@ int main(int argc, char const *argv[])
 	printf("The Machine:: waiting...\n");
 	int rc = UDP_Read(sd, &addr, message, BUFFER_SIZE);
 	printf("The Machine:: read message [size:%d contents:(%s)]\n", rc, message);
-    
 	if (rc > 0) {
-            char reply[BUFFER_SIZE];
-            sprintf(reply, "goodbye world");
+        char* keys[BUFFER_SIZE];
+        int splitIndex = 0;
+        char *split = strtok (message, SPLITTER);
+        
+        for(; split != NULL; splitIndex++)
+        {
+            keys[splitIndex] = split;
+            split = strtok (NULL, SPLITTER);
+        }
+        
+        assert(strcmp(keys[0], "TOMACHINE") == 0); // PROTOCOL REQUIREMENT
+        char reply[BUFFER_SIZE];
+        if (strcmp(keys[1], "MFS_Init") == 0) // Initialization
+        {
+            sprintf(reply, "init success!");
             rc = UDP_Write(sd, &addr, reply, BUFFER_SIZE);
-	    printf("The Machine:: reply\n");
+	        printf("The Machine:: reply\n");
+        }else if (strcmp(keys[1], "MFS_Lookup") == 0)
+        {
+
+        }else if (strcmp(keys[1], "MFS_Stat") == 0)
+        {
+            
+        }else if (strcmp(keys[1], "MFS_Write") == 0)
+        {
+            
+        }else if (strcmp(keys[1], "MFS_Read") == 0)
+        {
+            
+        }else if (strcmp(keys[1], "MFS_Creat") == 0)
+        {
+            
+        }else if (strcmp(keys[1], "MFS_Unlink") == 0)
+        {
+            
+        }else if (strcmp(keys[1], "MFS_Shutdown") == 0)
+        {
+            fsync(fileImageFileDescriptor);
+            sprintf(reply, "stopping!");
+            rc = UDP_Write(sd, &addr, reply, BUFFER_SIZE);
+	        printf("The Machine:: reply\n");
+            exit(0);
+        }
+        
 	} 
     }
     

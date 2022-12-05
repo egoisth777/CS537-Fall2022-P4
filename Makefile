@@ -18,3 +18,7 @@ clean:
 
 %.o: %.c Makefile
 	${CC} ${CFLAGS} -c $<
+
+tst:
+	gcc fscli.c -o fscli udp.c
+	gcc fsserv.c -o fsserv udp.c
