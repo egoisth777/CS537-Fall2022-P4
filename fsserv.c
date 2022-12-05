@@ -194,7 +194,28 @@ int main(int argc, char const *argv[])
 
         }else if (strcmp(keys[1], "MFS_Write") == 0)
         {
-            
+            int inum = atoi(keys[2]);
+            char* buffer = (char *) atoi(keys[3]);
+            int offset = atoi(keys[4]);
+            int nbytes = atoi(keys[5]);
+
+            if (nbytes <= 0 || nbytes > 4096 || offset < 0 || offset > 4096 || checkIfInumValid(inum, numInode, inode_bitmap) == -1) {
+                respondToServer(&reply, -1, sd, &addr, &rc);
+            }else {
+                // Check if it is a regular file
+                inode_t information = inode_table_struct[inum];
+                if (information.type == 0)
+                    respondToServer(&reply, -1, sd, &addr, &rc);
+                else {
+                    // Write to persistency file
+                    write(fileImageFileDescriptor, buffer, nbytes);
+                    fsync(fileImageFileDescriptor);
+                    // Write to memory (This way is less efficient by just re-readin, could change to a more eff-way)
+                    lseek(fileImageFileDescriptor, BLOCK_SIZE * superBlock.data_region_addr, SEEK_SET);
+                    ssize_t numReadDataRegion = read(fileImageFileDescriptor, data_region, BLOCK_SIZE * superBlock.data_region_len);
+                    respondToServer(&reply, 0, sd, &addr, &rc);
+                }
+            }
         }else if (strcmp(keys[1], "MFS_Read") == 0)
         {
             

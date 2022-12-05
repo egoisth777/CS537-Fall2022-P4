@@ -9,7 +9,7 @@
 #define DIRECT_PTRS (30)
 
 typedef struct {
-    int type;   // MFS_DIRECTORY or MFS_REGULAR
+    int type;   // MFS_DIRECTORY or MFS_REGULAR // Let's assume 0 = dir ~ 1 = file
     int size;   // bytes
     unsigned int direct[DIRECT_PTRS];
 } inode_t;
