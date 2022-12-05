@@ -17,7 +17,8 @@
 // super_t superBlock
 // char* inode_bitmap
 // char* data_bitmap
-// char* inode_table
+// int* inode_table
+// inode_t* inode_table_struct
 // char* data_region
 int main(int argc, char const *argv[])
 {
@@ -84,7 +85,17 @@ int main(int argc, char const *argv[])
     ssize_t numReadDataBitmap = read(fileImageFileDescriptor, data_bitmap, BLOCK_SIZE * superBlock.data_bitmap_len);
 
     // Read-in the inode table
-    char* inode_table = malloc(sizeof(char) * BLOCK_SIZE * superBlock.inode_region_len);
+    int* inode_table = malloc(sizeof(int) * (BLOCK_SIZE / sizeof(int)) * superBlock.inode_region_len);
+    int numInode = BLOCK_SIZE * superBlock.inode_region_len / sizeof(inode_t);
+    inode_t* inode_table_struct = malloc(sizeof(inode_t) * numInode);
+    for(int i = 0; i < numInode; i ++)
+    {
+        inode_t curr;
+        curr.type = inode_table[sizeof(inode_t) * i];
+        curr.size = inode_table[sizeof(inode_t) * i + 1];
+        for(int j = 0; j < DIRECT_PTRS; j ++)
+            curr.direct[j] = inode_table[sizeof(inode_t) * i + 2 + j];
+    }
 
     lseek(fileImageFileDescriptor, BLOCK_SIZE * superBlock.inode_region_addr, SEEK_SET);
     ssize_t numReadInodeTable = read(fileImageFileDescriptor, inode_table, BLOCK_SIZE * superBlock.inode_region_len);
@@ -123,6 +134,33 @@ int main(int argc, char const *argv[])
 	        printf("The Machine:: reply\n");
         }else if (strcmp(keys[1], "MFS_Lookup") == 0)
         {
+            int pinum = atoi(keys[2]);
+            char* name = keys[3];
+
+            inode_t parent = inode_table_struct[pinum];
+            int found = 0;
+            for(int i = 0; i < DIRECT_PTRS; i ++)
+            {
+                unsigned int curr = parent.direct[i];
+                char currName[28];
+                char* namePosition = data_region + (BLOCK_SIZE * curr);
+                memcpy(&currName, namePosition, 28);
+                int* inumPtr = (int *) (data_region + (BLOCK_SIZE * curr) + 28 * sizeof(char));
+
+                if (strcmp(currName, name) == 0)
+                {
+                    found = 1;
+                    sprintf(reply, "%d", &inumPtr);
+                    rc = UDP_Write(sd, &addr, reply, BUFFER_SIZE);
+                    printf("The Machine:: reply\n");
+                    break;
+                }
+            }
+            if (found == 0) {
+                sprintf(reply, "-1");
+                rc = UDP_Write(sd, &addr, reply, BUFFER_SIZE);
+                printf("The Machine:: reply\n");
+            }
 
         }else if (strcmp(keys[1], "MFS_Stat") == 0)
         {
