@@ -71,7 +71,7 @@ int MFS_Stat(int inum, MFS_Stat_t *m)
 int MFS_Write(int inum, char *buffer, int offset, int nbytes)
 {
     char message[BUFFER_SIZE];
-    sprintf(message, "TOMACHINE~MFS_Write~%d~%d~%d~%d", inum, (int)buffer, offset, nbytes); // TODO: Check this (int)buffer converts correctly
+    sprintf(message, "TOMACHINE~MFS_Write~%d~%s~%d~%d", inum, buffer, offset, nbytes); // TODO: Check this (int)buffer converts correctly
     printf("client stats :: [%s]\n", message);
     int rc;
     rc = UDP_Write(sd, &addrSnd, message, BUFFER_SIZE);
