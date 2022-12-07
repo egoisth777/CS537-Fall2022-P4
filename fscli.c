@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <assert.h>
+#include <sys/select.h>
 #include "mfs.h"
 #include "udp.h"
 #include "ufs.h"
@@ -13,13 +14,25 @@ int initialized = 0;
 char* host;
 int portNum;
 struct sockaddr_in addrSnd, addrRcv;
-int sd = 0;
+int sd = -1;
+fd_set rfds;
+struct timeval tv;
+int rc;
+
+int wait_timeout(int returnVal) {
+    tv.tv_sec = 5;
+    tv.tv_usec = 0;
+    rc = returnVal;
+    FD_ZERO(&rfds);
+    FD_SET(sd, &rfds);
+    select(sd + 1, &rfds, NULL, NULL, &tv);
+}
 
 int MFS_Init(char *hostname, int port)
 {
     sd = UDP_Open(20000);
-    int rc = UDP_FillSockAddr(&addrSnd, hostname, port);
-
+    rc = UDP_FillSockAddr(&addrSnd, hostname, port);
+    
     char message[BUFFER_SIZE];
     sprintf(message, "TOMACHINE~MFS_Init");
 

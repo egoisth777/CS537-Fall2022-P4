@@ -2,6 +2,9 @@
     "files.associations": {
         "udp.h": "c",
         "tcp.h": "c",
-        "in.h": "c"
+        "in.h": "c",
+        "mfs.h": "c",
+        "system_error": "c",
+        "*.inc": "c"
     }
 }
