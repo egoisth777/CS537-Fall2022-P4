@@ -76,9 +76,9 @@ int findEmptyDataBitmapSlot(char* bitmap, super_t superBlock, inode_t* metadata,
     return allocated;
 }
 
-
 // Type: 0 databitmap 1 inodebitmap
-int findEmptyInodeBitmapSlot(char* bitmap, super_t superBlock, inode_t* inodes, int fileType, int pinum) {
+int findEmptyInodeBitmapSlot(char *bitmap, super_t superBlock, inode_t *inodes, int fileType, int pinum)
+{
     int allocated = 0;
     for (int j = 0; j < superBlock.inode_region_len / 8; j++) //@TODO: not resolved, think of situation not divided by 8
     {
@@ -101,18 +101,11 @@ int findEmptyInodeBitmapSlot(char* bitmap, super_t superBlock, inode_t* inodes, 
                     {
                         inodes[emptySlot].type = 0;
                         inodes[emptySlot].size = BLOCK_SIZE;
-
-                        // TODO : CREAT SB
-
-                        /*
-                        inodes[emptySlot].direct[0] = emptySlot;
-                        inodes[emptySlot].direct[1] = pinum;
-                        */
-                        /*
-                        for(int x = 0; x < 32; x ++)
-                            inodes[emptySlot].direct[x] = -1;
-                        */
-                    }else {
+                        inodes[emptySlot].direct
+                        
+                    }
+                    else
+                    {
                         inodes[emptySlot].type = 0;
                         inodes[emptySlot].size = 0;
                     }
@@ -122,6 +115,35 @@ int findEmptyInodeBitmapSlot(char* bitmap, super_t superBlock, inode_t* inodes, 
             }
         }
     }
+}
+
+int lookup(int pinum, char * name, message *reply_msg, int numInode, char* inode_bitmap, 
+            inode_t * inode_table, char* data_region, int * inumPtr)
+{
+        inode_t parent = inode_table[pinum];
+        int found = 0;
+        for (int i = 0; i < DIRECT_PTRS; i++)
+        {
+            unsigned int curr = parent.direct[i];
+            unsigned int comparison = -1;
+            if (curr == comparison)
+                continue;
+            char *namePosition = data_region + (BLOCK_SIZE * curr);
+            char currName[28];
+            for (int j = 0; j < BLOCK_SIZE / sizeof(dir_ent_t); j++)
+            {
+                memcpy(&currName, namePosition + (j * 32), 28);
+                *inumPtr = *(int *)(namePosition + (j * 32) + 28 * sizeof(char));
+                if (strcmp(currName, name) == 0)
+                {
+                    found = 1;
+                    break;
+                }
+            }
+            if (found == 1)
+                break;
+        }
+        return found;
 }
 
 // Important variables:
@@ -202,6 +224,7 @@ int main(int argc, char const *argv[])
         printf("The Machine:: waiting...\n");
         int rc = UDP_Read(sd, &addr, &received_msg, sizeof(message));
         printf("The Machine:: read message [size:%d contents:(%s)]\n", rc, received_msg.msg);
+        
         if (rc > 0)
         {
             message reply_msg;
@@ -219,39 +242,15 @@ int main(int argc, char const *argv[])
             {
                 int pinum = param1;
                 char *name = received_msg.charParam;
-
                 if (checkIfInumValid(pinum, numInode, inode_bitmap) == -1)
                 {
-                    respondToServer(reply_msg, -1, sd, &addr, &rc);
+                    respondToServer(reply_msg, -1, sd, &addr, rc);
                 }
-                else
-                {
-                    inode_t parent = inode_table[pinum];
-                    int found = 0;
-                    for (int i = 0; i < DIRECT_PTRS; i++)
-                    {
-                        unsigned int curr = parent.direct[i];
-                        unsigned int comparison = -1;
-                        if (curr == comparison)
-                            continue;
-                        char *namePosition = data_region + (BLOCK_SIZE * curr);
-                        char currName[28];
-                        for (int j = 0; j < BLOCK_SIZE / sizeof(dir_ent_t); j++)
-                        {
-                            memcpy(&currName, namePosition + (j * 32), 28);
-                            int *inumPtr = (int *)(namePosition + (j * 32) + 28 * sizeof(char));
-                            if (strcmp(currName, name) == 0)
-                            {
-                                found = 1;
-                                respondToServer(reply_msg, &inumPtr, sd, &addr, &rc);
-                                break;
-                            }
-                        }
-                        if (found == 1)
-                            break;
-                    }
-                    if (found == 0)
-                        respondToServer(reply_msg, -1, sd, &addr, &rc);
+                else{
+                    int * inumPtr;
+                    int found = lookup(pinum, name, &reply_msg, numInode, inode_bitmap, inode_table, data_region, inumPtr);
+                    found = -1 ? found == 0 : *inumPtr;
+                    respondToServer(reply_msg, found, sd, &addr, rc);
                 }
             }
             else if (strcmp(msg, "MFS_Stat") == 0)
@@ -285,7 +284,7 @@ int main(int argc, char const *argv[])
                 {
                     // Check if it is a regular file
                     inode_t metadata = inode_table[inum];
-                    if (metadata.type == 0) // directory
+                    if (metadata.type == 0) // directory {}
                         respondToServer(reply_msg, -1, sd, &addr, &rc);
                     else
                     {
@@ -297,9 +296,9 @@ int main(int argc, char const *argv[])
                         int numByteToWriteSecondBlock = numBlockToWrite== 1 ? 0 : nbytes - numByteToWriteFirstBlock;
 
                         int locationFirstBlock = offset / BLOCK_SIZE;
-                        int locationFirstBlockNum = metadata.direct[locationFirstBlock];
+                        unsigned locationFirstBlockNum = metadata.direct[locationFirstBlock];
                         int locationSecondBlock = locationFirstBlock + 1; // prove this
-                        int locationSecondBlockNum = metadata.direct[locationSecondBlock];
+                        unsigned locationSecondBlockNum = metadata.direct[locationSecondBlock];
 
                         // Operation on First Block
                         int firstBlockAllocated = locationFirstBlockNum == comparison ? 0 : 1;
@@ -309,8 +308,10 @@ int main(int argc, char const *argv[])
                         }
                         locationFirstBlockNum = metadata.direct[locationFirstBlock];
 
-                        if (firstBlockAllocated == -1)
+                        if (firstBlockAllocated == 0) {
                             respondToServer(reply_msg, -1, sd, &addr, &rc);
+                            continue;
+                        }
                         
                         char* startAddr = image + superBlock->data_region_addr + BLOCK_SIZE * locationFirstBlockNum + startAddrFirstBlockOffset;
                         // Write to persistency file
@@ -326,7 +327,7 @@ int main(int argc, char const *argv[])
                             }
                             locationSecondBlockNum = metadata.direct[locationSecondBlock];
 
-                            if (secondBlockAllocated == -1)
+                            if (secondBlockAllocated == 0)
                                 respondToServer(reply_msg, -1, sd, &addr, &rc);
                             
                             char* startAddr2 = image + superBlock->data_region_addr + BLOCK_SIZE * locationSecondBlockNum;
@@ -344,44 +345,90 @@ int main(int argc, char const *argv[])
                 int offset = param2;
                 int nbytes = param3;
 
-                if (nbytes <= 0 || nbytes > BLOCK_SIZE || offset < 0 || offset > BLOCK_SIZE * DIRECT_PTRS || checkIfInumValid(inum, numInode, inode_bitmap) == -1)
+                if (nbytes <= 0 || nbytes > BLOCK_SIZE || offset < 0 
+                || offset > BLOCK_SIZE * DIRECT_PTRS || checkIfInumValid(inum, numInode, inode_bitmap) == -1)
+                { 
+                    respondToServer(reply_msg, -1, sd, &addr, &rc);
+                    continue;
+                }
+                inode_t metadata = inode_table[inum];
+                if (metadata.type == 0) { // directory
+                    int dir_size = sizeof(dir_ent_t);
+                    if (offset % dir_size != 0 || (offset + nbytes) % dir_size != 0){
+                        respondToServer(reply_msg, -1, sd, &addr, &rc);
+                        continue;
+                    }
+                }
+                int no_block_to_read = findNoBlockAlloc(offset, nbytes);    // how many blocks will be read
+                unsigned int comparison = -1;
+                int no_bytes_to_read_1 = no_block_to_read == 2 ? BLOCK_SIZE - offset : nbytes; // number of bytes to be read from first block
+                
+                int startAddrFirstBlockOffset = nbytes % BLOCK_SIZE; // startin addr of read in first block
+                int no_bytes_to_read_2 = no_block_to_read == 1 ? 0 : nbytes - no_bytes_to_read_1; // number of bytes to be read from second block
+
+                int locationFirstBlock = offset / BLOCK_SIZE;
+                unsigned locationFirstBlockNum = metadata.direct[locationFirstBlock];
+                int locationSecondBlock = locationFirstBlock + 1; // prove this
+                unsigned locationSecondBlockNum = metadata.direct[locationSecondBlock];
+
+                // Operation on First Block
+                int firstBlockAllocated = locationFirstBlockNum == comparison ? 0 : 1;
+                if (firstBlockAllocated == 0)
                 {
                     respondToServer(reply_msg, -1, sd, &addr, &rc);
                     continue;
                 }
-                inode_t targetInode = inode_table[inum];
-                if (targetInode.type == 0)
-                {   // directory
-                    int dir_size = targetInode.size / 32;
-                    
-                }
-                int numStartBlock = offset / BLOCK_SIZE; // determine which block to be written
-                int numEndBlock = (offset + nbytes) /BLOCK_SIZE; // end no. of the block
-                if(numEndBlock == numStartBlock){ //case where you only have to read one block
-                    unsigned int BlockNumToRead = targetInode.direct[numStartBlock];
-                    // unsigned int comparison = -1;
-                    if ((unsigned int) (-1) == BlockNumToRead)
+
+                char* startAddr = image + superBlock->data_region_addr + BLOCK_SIZE * locationFirstBlockNum + startAddrFirstBlockOffset;
+                // Read
+                memcpy(reply_msg.buf, startAddr, no_bytes_to_read_1);
+
+                if (no_block_to_read == 2) {
+                    // Operation on Second Block
+                    int secondBlockAllocated = locationSecondBlockNum == comparison ? 0 : 1;
+                    if (secondBlockAllocated == 0)
                     {
-                        respondToServer(&reply, -1, sd, &addr, &rc);
+                        respondToServer(reply_msg, -1, sd, &addr, &rc);
                         continue;
                     }
-                    char* tmp = data_region + BlockNumToRead * BLOCK_SIZE;
-                    char msg2[1 + nbytes] ;
-                    msg2[0] = '1';
-                    strncpy(msg2+1, tmp, nbytes);
-                    rc = UDP_Write(sd, &addr, *msg2, BUFFER_SIZE);
                     
-                }else{ // case where you have to read two blocks
+                    char* startAddr2 = image + superBlock->data_region_addr + BLOCK_SIZE * locationSecondBlockNum;
+                    // Read
+                    memcpy(reply_msg.buf + no_bytes_to_read_1, startAddr2, no_bytes_to_read_2);
+                }
+                respondToServer(reply_msg, 0, sd, &addr, &rc);   
+            }
+            else if (strcmp(msg, "MFS_Creat") == 0)
+            {
+                int pinum  = param1;
+                int type   = param2;
+                char * name = received_msg.charParam;
+                if (checkIfInumValid(pinum, numInode, inode_bitmap) == -1) 
+                { //check if the pinum is valid
+                    respondToServer(reply_msg, -1, sd, &addr, rc);
+                    continue;
+                }
+                inode_t metadata = inode_table[pinum]; // meta data of the file/dir to create
+                if(metadata.type == 1){ // cannot create a file inside a file
+                    respondToServer(reply_msg, -1, sd, &addr, rc);
+                    continue;
+                }
+                
+                if( type == 0 )
+                { // create a directory
+                    int success = findEmptyInodeBitmapSlot();
+                    if()
 
                 }
-                                          
-                unsigned int BlockNumToRead = targetInode.direct[numStartBlock]; // Number of Data Block To read
+                else
+                { // create a file
+
+                }
 
                 
                 
-            }
-            else if (strcmp(keys[1], "MFS_Creat") == 0)
-            {
+                
+                
             }
             else if (strcmp(keys[1], "MFS_Unlink") == 0)
             {

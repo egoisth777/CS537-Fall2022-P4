@@ -8,7 +8,7 @@
 
 #define DIRECT_PTRS (30) // no. of data pointers 
 
-typedef struct {
+typedef struct { // 128bytes
     int type;   // MFS_DIRECTORY or MFS_REGULAR // Let's assume 0 = dir ~ 1 = file
     int size;   // bytes
     unsigned int direct[DIRECT_PTRS];
