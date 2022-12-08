@@ -76,11 +76,21 @@ int findEmptyDataBitmapSlot(char* bitmap, super_t superBlock, inode_t* metadata,
     return allocated;
 }
 
-// Type: 0 databitmap 1 inodebitmap
-int findEmptyInodeBitmapSlot(char *bitmap, super_t superBlock, inode_t *inodes, int fileType, int pinum)
+
+
+/**
+ * @brief find an empty spot in the Inode Bitmap, allocate it. Success will return 1, failure will return 0
+ * 
+ * @param bitmap the starting address of the Inode bitmap
+ * @param superBlock pointer to the super block
+ * @param emptySlot index of the emptySlot number
+ * @return int success : 1, failure 0
+ */
+int 
+findEmptyInodeBitmapSlot(char *bitmap, super_t superBlock, int * emptySlot)
 {
     int allocated = 0;
-    for (int j = 0; j < superBlock.inode_region_len / 8; j++) //@TODO: not resolved, think of situation not divided by 8
+    for (int j = 0; j < superBlock.inode_region_len / 8; j++)
     {
         if (allocated == 1)
         {
@@ -88,37 +98,25 @@ int findEmptyInodeBitmapSlot(char *bitmap, super_t superBlock, inode_t *inodes, 
         }
         if (bitmap[j] & 0xFF != 0xFF)
         {
-            int emptySlot = -1;
+            *emptySlot = -1;
             int temp = bitmap[j];
 
-            for (int x = 0; x < 8; x++)
+            for (unsigned int x = 0; x < 8; x++)
             {
                 if ((temp >> x) - ((temp >> (x + 1)) << 1) == 0)
                 {
-                    emptySlot = (8 - x) + j * 8;
-                    bitmap[j] = bitmap[j] | (int)pwd(2, x);
-                    if (fileType == 0) // dir
-                    {
-                        inodes[emptySlot].type = 0;
-                        inodes[emptySlot].size = BLOCK_SIZE;
-                        inodes[emptySlot].direct
-                        
-                    }
-                    else
-                    {
-                        inodes[emptySlot].type = 0;
-                        inodes[emptySlot].size = 0;
-                    }
+                    *emptySlot = (8 - x) + j * 8;
+                    bitmap[j] = bitmap[j] | (int)pwd(2, x); // set the bitmap
                     allocated = 1;
                     break;
                 }
             }
         }
     }
+    return allocated;
 }
 
-int lookup(int pinum, char * name, message *reply_msg, int numInode, char* inode_bitmap, 
-            inode_t * inode_table, char* data_region, int * inumPtr)
+int lookup(int pinum, char * name, inode_t * inode_table, char* data_region, int * inumPtr)
 {
         inode_t parent = inode_table[pinum];
         int found = 0;
@@ -248,7 +246,7 @@ int main(int argc, char const *argv[])
                 }
                 else{
                     int * inumPtr;
-                    int found = lookup(pinum, name, &reply_msg, numInode, inode_bitmap, inode_table, data_region, inumPtr);
+                    int found = lookup(pinum, name, inode_table, data_region, inumPtr);
                     found = -1 ? found == 0 : *inumPtr;
                     respondToServer(reply_msg, found, sd, &addr, rc);
                 }
@@ -335,6 +333,8 @@ int main(int argc, char const *argv[])
                             memcpy(startAddr2, buffer, numByteToWriteSecondBlock);
                             msync(startAddr2, numByteToWriteSecondBlock, MS_SYNC);
                         }
+                        msync(inode_bitmap, superBlock->inode_bitmap_len * BLOCK_SIZE, MS_SYNC);
+                        msync(data_bitmap, superBlock->data_bitmap_len * BLOCK_SIZE, MS_SYNC);
                         respondToServer(reply_msg, 0, sd, &addr, &rc);
                     }
                 }
@@ -403,9 +403,15 @@ int main(int argc, char const *argv[])
                 int pinum  = param1;
                 int type   = param2;
                 char * name = received_msg.charParam;
-                if (checkIfInumValid(pinum, numInode, inode_bitmap) == -1) 
+
+                if (checkIfInumValid(pinum, numInode, inode_bitmap) == -1 || strlen(name) > 28) 
                 { //check if the pinum is valid
                     respondToServer(reply_msg, -1, sd, &addr, rc);
+                    continue;
+                }
+                int *inumPtr;
+                if (lookup(pinum, name, inode_table, data_region, inumPtr) == 0) {
+                    respondToServer(reply_msg, 0, sd, &addr, rc);
                     continue;
                 }
                 inode_t metadata = inode_table[pinum]; // meta data of the file/dir to create
@@ -413,32 +419,52 @@ int main(int argc, char const *argv[])
                     respondToServer(reply_msg, -1, sd, &addr, rc);
                     continue;
                 }
-                
+
+                int * emptySlot;
+                if (findEmptyInodeBitmapSlot(inode_bitmap, *superBlock, emptySlot) == 0)
+                { // allocation failure, not enough spot
+                    respondToServer(reply_msg, -1, sd, &addr, rc);
+                    continue;
+                }
                 if( type == 0 )
                 { // create a directory
-                    int success = findEmptyInodeBitmapSlot();
-                    if()
-
+                    inode_table[*emptySlot].size = BLOCK_SIZE;
+                    inode_table[*emptySlot].type = 0;
+                    if(!findEmptyDataBitmapSlot(data_bitmap, *superBlock, inode_table + *emptySlot, 0)){
+                        respondToServer(reply_msg, -1, sd, &addr, rc);
+                        continue;
+                    }
+                    int datablock_no = inode_table[*emptySlot].direct[0];
+                    MFS_DirEnt_t self = {
+                        ".", *emptySlot
+                    };
+                    MFS_DirEnt_t parent = {
+                        "..", pinum 
+                    };
+                    memcpy(data_region + datablock_no * BLOCK_SIZE, &self, sizeof(MFS_DirEnt_t));
+                    memcpy(data_region + datablock_no * BLOCK_SIZE + sizeof(MFS_DirEnt_t), &parent, sizeof(MFS_DirEnt_t));
+                    msync(data_region + datablock_no * BLOCK_SIZE, sizeof(MFS_DirEnt_t) * 2, MS_SYNC);
                 }
                 else
                 { // create a file
-
+                    inode_table[*emptySlot].size = BLOCK_SIZE;
+                    inode_table[*emptySlot].type = 0;
+                    for(int i = 0; i < DIRECT_PTRS; i ++)
+                        inode_table[*emptySlot].direct[i] = (unsigned) -1;
                 }
-
-                
-                
-                
+                msync(inode_bitmap, superBlock->inode_bitmap_len * BLOCK_SIZE, MS_SYNC);
+                msync(data_bitmap, superBlock->data_bitmap_len * BLOCK_SIZE, MS_SYNC);
+                msync(inode_table + *emptySlot, sizeof(inode_t), MS_SYNC);
+                respondToServer(reply_msg, 0, sd, &addr, rc);
+            }
+            else if (strcmp(msg, "MFS_Unlink") == 0)
+            {
                 
             }
-            else if (strcmp(keys[1], "MFS_Unlink") == 0)
+            else if (strcmp(msg, "MFS_Shutdown") == 0)
             {
-            }
-            else if (strcmp(keys[1], "MFS_Shutdown") == 0)
-            {
-                fsync(image_fd);
-                sprintf(reply, "stopping!");
-                rc = UDP_Write(sd, &addr, reply, BUFFER_SIZE);
-                printf("The Machine:: reply\n");
+                msync(image, image_size, MS_SYNC);
+                respondToServer(reply_msg, 0, sd, &addr, rc);
                 exit(0);
             }
         }
