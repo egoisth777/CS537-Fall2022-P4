@@ -22,6 +22,7 @@ int main(int argc, char *argv[]) {
         fd_set rd;
         FD_ZERO(&rd);
         FD_SET(sd, &rd);
+        tv.tv_sec = 5;
 
         printf("client:: send message [%s]\n", forward_msg_struct.msg);
         rc = UDP_Write(sd, &addrSnd, (char*)&forward_msg_struct, BUFFER_SIZE);
@@ -30,8 +31,14 @@ int main(int argc, char *argv[]) {
             continue;
         }
         printf("client:: wait for reply...\n");
+        printf("sd = %d\n", sd);
         res = select(sd + 1, &rd, NULL, NULL, &tv);
         printf("res: %d\n, rc = %d \n", res, rc);
+        if (res <= 0) {
+            printf("fd is not set - err / timeout\n");
+            continue;
+        }
+
         rc = UDP_Read(sd, &addrRcv, (char*)&forward_msg_struct, BUFFER_SIZE);
         res = select(sd + 1, &rd, NULL, NULL, &tv);
         printf("res: %d\n, rc = %d \n", res, rc);
