@@ -13,13 +13,72 @@
 
 #define BLOCK_SIZE (4096)
 
+
+// define some helper functions
 /**
- * Check if the inum is valid and it is allocated
+ * @brief Get the bit given the pointer to the inode bitmap/data bitmap
+ * 
+ * @param bitmap the pointer to the inode bitmap or data bitmap
+ * @param position the inode number
+ * @return unsigned int 
+ */
+unsigned int 
+get_bit(unsigned int *bitmap, int position) {
+   int index = position / 32;
+   int offset = 31 - (position % 32);
+   return (bitmap[index] >> offset) & 0x1;
+}
+
+
+/**
+ * @brief Set the bit given the pointer to the inode bitmap/data bitmap
+ * 
+ * @param bitmap the pointer to the inode bitmap or data bitmap
+ * @param position the inode number
+ * @return void 
+ */
+void 
+set_bit(unsigned int *bitmap, int position) {
+   int index = position / 32;
+   int offset = 31 - (position % 32);
+   bitmap[index] |= 0x1 << offset;
+}
+
+
+/**
+ * @brief find an empty spot in the Inode/data Bitmap, allocate it. Success will return 1, failure will return 0
+ * 
+ * @param bitmap the starting address of the Inode bitmap
+ * @param size size of the bitmap
+ * @param emptySlot index of the emptySlot number
+ * @return int success : 1, failure 0
+ */
+int 
+find_empty_set_bitmap(unsigned int * bitmap, int size, int * emptySlot)
+{
+    int allocated = 0;
+    for(int i = 0; i < size; i++){
+        if(get_bit(bitmap, i) == 0){    // find empty slot
+            set_bit(bitmap, i);         // set the empty slot to 1
+            allocated = 1;
+            *emptySlot = i;             // set the empty slot index
+            break;
+        }
+    }
+    return allocated;
+}
+
+
+
+
+/**
+ * @brief Check if the inum is valid and it is allocated
  * 
  * @param inum the inode number
  * @param numInode number of inodes
  * @param inode_bitmap the pointer to the start of the inode_bitmap
-*/
+ * @return int -1: failure | 0: success 
+ */
 int checkIfInumValid(int inum, int numInode, char *inode_bitmap)
 {
     // Check if the bitmap's perspective agrees. If the allocated bit is 1.
@@ -39,7 +98,7 @@ void respondToServer(message reply, int replyNum, int sd, struct sockaddr_in *ad
 }
 
 
-int 
+int
 findNoBlockAlloc(int offset, int nbytes) {
     return offset / BLOCK_SIZE == (offset + nbytes) / BLOCK_SIZE ? 1 : 2;
 }
@@ -77,44 +136,6 @@ int findEmptyDataBitmapSlot(char* bitmap, super_t superBlock, inode_t* metadata,
 }
 
 
-
-/**
- * @brief find an empty spot in the Inode Bitmap, allocate it. Success will return 1, failure will return 0
- * 
- * @param bitmap the starting address of the Inode bitmap
- * @param superBlock pointer to the super block
- * @param emptySlot index of the emptySlot number
- * @return int success : 1, failure 0
- */
-int 
-findEmptyInodeBitmapSlot(char *bitmap, super_t superBlock, int * emptySlot)
-{
-    int allocated = 0;
-    for (int j = 0; j < superBlock.inode_region_len / 8; j++)
-    {
-        if (allocated == 1)
-        {
-            break;
-        }
-        if (bitmap[j] & 0xFF != 0xFF)
-        {
-            *emptySlot = -1;
-            int temp = bitmap[j];
-
-            for (unsigned int x = 0; x < 8; x++)
-            {
-                if ((temp >> x) - ((temp >> (x + 1)) << 1) == 0)
-                {
-                    *emptySlot = (8 - x) + j * 8;
-                    bitmap[j] = bitmap[j] | (int)pwd(2, x); // set the bitmap
-                    allocated = 1;
-                    break;
-                }
-            }
-        }
-    }
-    return allocated;
-}
 
 int lookup(int pinum, char * name, inode_t * inode_table, char* data_region, int * inumPtr)
 {
@@ -421,7 +442,7 @@ int main(int argc, char const *argv[])
                 }
 
                 int * emptySlot;
-                if (findEmptyInodeBitmapSlot(inode_bitmap, *superBlock, emptySlot) == 0)
+                if (find_empty_set_bitmap((unsigned int *)inode_bitmap, superBlock->num_inodes, emptySlot) == 0)
                 { // allocation failure, not enough spot
                     respondToServer(reply_msg, -1, sd, &addr, rc);
                     continue;

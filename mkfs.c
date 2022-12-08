@@ -62,16 +62,22 @@ int main(int argc, char *argv[]) {
     // presumed: block 0 is the super block
     super_t s;
 
+    // totals
+    s.num_inodes = num_inodes;
+    s.num_data = num_data;
+
     // inode bitmap
+    int bits_per_block = (8 * UFS_BLOCK_SIZE); // remember, there are 8 bits per byte
+
     s.inode_bitmap_addr = 1;
-    s.inode_bitmap_len = num_inodes / UFS_BLOCK_SIZE;
-    if (num_inodes % UFS_BLOCK_SIZE != 0)
+    s.inode_bitmap_len = num_inodes / bits_per_block;
+    if (num_inodes % bits_per_block != 0)
 	s.inode_bitmap_len++;
 
     // data bitmap
     s.data_bitmap_addr = s.inode_bitmap_addr + s.inode_bitmap_len;
-    s.data_bitmap_len = num_data / UFS_BLOCK_SIZE;
-    if (num_data % UFS_BLOCK_SIZE != 0)
+    s.data_bitmap_len = num_data / bits_per_block;
+    if (num_data % bits_per_block != 0)
 	s.data_bitmap_len++;
 
     // inode table
@@ -122,7 +128,7 @@ int main(int argc, char *argv[]) {
     bitmap_t b;
     for (i = 0; i < 1024; i++)
 	b.bits[i] = 0;
-    b.bits[0] = 0x80000000; // first entry is allocated
+    b.bits[0] = 0x1 << 31; // first entry is allocated
     
     rc = pwrite(fd, &b, UFS_BLOCK_SIZE, s.inode_bitmap_addr * UFS_BLOCK_SIZE);
     assert(rc == UFS_BLOCK_SIZE);
@@ -143,7 +149,7 @@ int main(int argc, char *argv[]) {
 
     inode_block itable;
     itable.inodes[0].type = UFS_DIRECTORY;
-    itable.inodes[0].size = sizeof(dir_ent_t); // in bytes
+    itable.inodes[0].size = 2 * sizeof(dir_ent_t); // in bytes
     itable.inodes[0].direct[0] = s.data_region_addr;
     for (i = 1; i < DIRECT_PTRS; i++)
 	itable.inodes[0].direct[i] = -1;
