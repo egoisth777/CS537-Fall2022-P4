@@ -59,7 +59,7 @@ int sendToServer(int sd, struct timeval tv, message forward_msg, message *receiv
         }
         msg_code = received_msg->msg_code;
     }
-    printf("client:: got reply [size:%d code:(%s)\n", rc, msg_code);
+    printf("client:: got reply [size:%d code:(%d)\n", rc, msg_code);
     return msg_code;
 }
 
@@ -82,8 +82,8 @@ int MFS_Init(char *hostname, int port)
         FD_SET(sd, &rd);
         tv.tv_sec = 5;
 
-        printf("client:: send message [%s]\n", msg.msg);
-        rc = UDP_Write(sd, &addrSnd, (char*)&msg, BUFFER_SIZE);
+        printf("client:: send message [%s]\n", forward_msg.msg);
+        rc = UDP_Write(sd, &addrSnd, (char*)&forward_msg, BUFFER_SIZE);
         if (rc < 0) {
             printf("client:: failed to send\n");
             continue;
@@ -114,13 +114,14 @@ int MFS_Init(char *hostname, int port)
         s_descriptor = sd;
     }
 
-    printf("client:: got reply [size:%d code:(%s)\n", rc, msg_code);
+    printf("client:: got reply [size:%d code:(%d)\n", rc, msg_code);
     return 0;
     
 }
 int MFS_Lookup(int pinum, char *name)
 {
-    message forward_msg = {.msg = "MFS_Lookup", .param1 = pinum, .charParam = name};
+    message forward_msg = {.msg = "MFS_Lookup", .param1 = pinum};
+    memcpy(&forward_msg.charParam, name, 48);
     message received_msg;
     return sendToServer(s_descriptor, tv, forward_msg, &received_msg, addrSnd, addrRcv);
 }
@@ -137,7 +138,8 @@ int MFS_Stat(int inum, MFS_Stat_t *m)
 }
 int MFS_Write(int inum, char *buffer, int offset, int nbytes)
 {
-    message forward_msg = {.msg = "MFS_Write", .param1 = inum, .buf = buffer, .param2 = offset, .param3 = nbytes};
+    message forward_msg = {.msg = "MFS_Write", .param1 = inum, .param2 = offset, .param3 = nbytes};
+    memcpy(&forward_msg.buf, buffer, 4096);
     message received_msg;
     return sendToServer(s_descriptor, tv, forward_msg, &received_msg, addrSnd, addrRcv);
 }
@@ -154,13 +156,15 @@ int MFS_Read(int inum, char *buffer, int offset, int nbytes)
 }
 int MFS_Creat(int pinum, int type, char *name)
 {
-    message forward_msg = {.msg = "MFS_Creat", .param1 = pinum, .param2 = type, .charParam = name};
+    message forward_msg = {.msg = "MFS_Creat", .param1 = pinum, .param2 = type};
+    memcpy(&forward_msg.charParam, name, 48);
     message received_msg;
     return sendToServer(s_descriptor, tv, forward_msg, &received_msg, addrSnd, addrRcv);
 }
 int MFS_Unlink(int pinum, char *name)
 {
-    message forward_msg = {.msg = "MFS_Unlink", .param1 = pinum, .charParam = name};
+    message forward_msg = {.msg = "MFS_Unlink", .param1 = pinum};
+    memcpy(&forward_msg.charParam, name, 48);
     message received_msg;
     return sendToServer(s_descriptor, tv, forward_msg, &received_msg, addrSnd, addrRcv);
 }
