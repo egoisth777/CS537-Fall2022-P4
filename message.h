@@ -1,5 +1,6 @@
 #include<stdio.h>
 
+
 typedef struct message
 {
     /* data */
