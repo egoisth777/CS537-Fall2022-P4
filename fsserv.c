@@ -190,32 +190,16 @@ rm_dir(int inum, inode_t *inode_table, char* data_region, char* data_bitmap, cha
 {
     inode_t metadata = inode_table[inum];
     int size = metadata.size;
-    int num_entry = size / sizeof(dir_ent_t);
-    int curr_entry_num;
-    int max_entry_per_block = BLOCK_SIZE / sizeof(dir_ent_t);
-    int curr_total_entry_num = 0;
+    if (size >= 2 * sizeof(dir_ent_t))
+        return -1;
     for(int i = 0; i < DIRECT_PTRS; i ++)
     {
         unsigned int data_addr = metadata.direct[i];
         if (data_addr == (unsigned int ) -1)
             continue;
-        curr_entry_num = 0;
-        while (curr_entry_num < max_entry_per_block && curr_total_entry_num < num_entry)
-        {
-            dir_ent_t *dir_entry = (dir_ent_t *) data_region;
-            curr_entry_num++;
-            curr_total_entry_num++;
-
-            inode_t curr_metadata = inode_table[dir_entry->inum];
-            if (curr_metadata.type == 1)
-                rm_file(dir_entry->inum, inode_table, data_bitmap, inode_bitmap);
-            else
-                rm_dir(dir_entry->inum, inode_table, data_region, data_bitmap, inode_bitmap);
-        }
         set_bit_zero((unsigned int *)data_bitmap, data_addr);
     }
     set_bit_zero((unsigned int *)inode_bitmap, inum);
-
     return 0;
 }
 
@@ -377,9 +361,10 @@ int main(int argc, char const *argv[])
 
             // Operation on First Block
             int firstBlockAllocated = locationFirstBlockNum == comparison ? 0 : 1;
+            int *emptySlot;
             if (firstBlockAllocated == 0)
             {
-                firstBlockAllocated = findEmptyDataBitmapSlot(data_bitmap, *superBlock, &metadata, locationFirstBlock);
+                firstBlockAllocated = find_empty_set_bitmap((unsigned int *) data_bitmap, superBlock->num_data, emptySlot);
             }
             locationFirstBlockNum = metadata.direct[locationFirstBlock];
 
@@ -388,6 +373,8 @@ int main(int argc, char const *argv[])
                 respondToServer(reply_msg, -1, sd, &addr, &rc);
                 continue;
             }
+
+            metadata.direct[locationFirstBlock] = *emptySlot;
 
             char *startAddr = image + superBlock->data_region_addr + BLOCK_SIZE * locationFirstBlockNum + startAddrFirstBlockOffset;
             // Write to persistency file
@@ -400,13 +387,14 @@ int main(int argc, char const *argv[])
                 int secondBlockAllocated = locationSecondBlockNum == comparison ? 0 : 1;
                 if (secondBlockAllocated == 0)
                 {
-                    secondBlockAllocated = findEmptyDataBitmapSlot(data_bitmap, *superBlock, &metadata, locationSecondBlock);
+                    secondBlockAllocated = find_empty_set_bitmap((unsigned int *) data_bitmap, superBlock->num_data, emptySlot);
                 }
                 locationSecondBlockNum = metadata.direct[locationSecondBlock];
 
                 if (secondBlockAllocated == 0)
                     respondToServer(reply_msg, -1, sd, &addr, &rc);
 
+                metadata.direct[locationSecondBlock] = *emptySlot;
                 char *startAddr2 = image + superBlock->data_region_addr + BLOCK_SIZE * locationSecondBlockNum;
                 // Write to persistency file
                 memcpy(startAddr2, buffer, numByteToWriteSecondBlock);
@@ -546,6 +534,7 @@ int main(int argc, char const *argv[])
             int pinum = param1;
             char *name = received_msg.charParam;
             int *inumPtr;
+            int res = -1;
 
             int found = lookup(pinum, name, inode_table, data_region, inumPtr);
             if (found == 0) // not found
@@ -555,9 +544,9 @@ int main(int argc, char const *argv[])
             }
             inode_t metadata = inode_table[*inumPtr];
             if (metadata.type == 1)
-                rm_file(*inumPtr, inode_table, data_bitmap, inode_bitmap);
+                res = rm_file(*inumPtr, inode_table, data_bitmap, inode_bitmap);
             else
-                rm_dir(*inumPtr, inode_table, data_region, data_bitmap, inode_bitmap);
+                res = rm_dir(*inumPtr, inode_table, data_region, data_bitmap, inode_bitmap);
 
             // parent 删除 name
             inode_t parent = inode_table[pinum];
@@ -582,6 +571,9 @@ int main(int argc, char const *argv[])
                 if (found == 1)
                     break;
             }
+            // hahahahaha
+            msync(image, image_size, MS_SYNC);
+            respondToServer(reply_msg, res, sd, &addr, rc);
         }
         else if (strcmp(msg, "MFS_Shutdown") == 0)
         {
