@@ -173,7 +173,8 @@ int lookup(int pinum, char * name, inode_t * inode_table, char* data_region, int
 // int* inode_table
 // inode_t* inode_table_struct
 // char* data_region
-int main(int argc, char const *argv[])
+int 
+main(int argc, char const *argv[])
 {
     // Get length of the argument
     int length = 0;
@@ -205,7 +206,6 @@ int main(int argc, char const *argv[])
     int sd = UDP_Open(portnum);
     assert(sd > -1);
 
-    // =============================================================================================
     // Read-in the super block
     int image_fd = open(fileImage, O_RDWR);
     struct stat sbuf;
