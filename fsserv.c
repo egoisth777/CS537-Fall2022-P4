@@ -111,39 +111,6 @@ int findNoBlockAlloc(int offset, int nbytes)
     return offset / BLOCK_SIZE == (offset + nbytes) / BLOCK_SIZE ? 1 : 2;
 }
 
-// Type: 0 databitmap 1 inodebitmap
-int findEmptyDataBitmapSlot(char *bitmap, super_t superBlock, inode_t *metadata, int dataNumStartBlock)
-{
-    int allocated = 0;
-    // Find a place in data bitmap
-    for (int j = 0; j < superBlock.data_region_len / 8; j++) //@TODO: not resolved, think of situation not divided by 8
-    {
-        if (allocated == 1)
-        {
-            break;
-        }
-        if (bitmap[j] & 0xFF != 0xFF)
-        {
-            int emptySlot = -1;
-            int temp = bitmap[j];
-
-            for (int x = 0; x < 8; x++)
-            {
-                if ((temp >> x) - ((temp >> (x + 1)) << 1) == 0)
-                {
-                    emptySlot = (8 - x) + j * 8;
-                    bitmap[j] = bitmap[j] | (int)pwd(2, x);
-                    metadata->direct[dataNumStartBlock] = emptySlot;
-                    metadata->size += BLOCK_SIZE;
-                    allocated = 1;
-                    break;
-                }
-            }
-        }
-    }
-    return allocated;
-}
-
 /**
  * @brief look up in the folder whether if the file with the name is contained
  * 
@@ -286,7 +253,7 @@ int main(int argc, char const *argv[])
         struct sockaddr_in addr;
         message received_msg;
         printf("The Machine:: waiting...\n");
-        int rc = UDP_Read(sd, &addr, &received_msg, sizeof(message));
+        int rc = UDP_Read(sd, &addr, (char*)&received_msg, sizeof(message));
         printf("The Machine:: read message [size:%d contents:(%s)]\n", rc, received_msg.msg);
         if (rc <= 0)
         {
@@ -295,14 +262,14 @@ int main(int argc, char const *argv[])
 
         message reply_msg; // message to be replied to client
         char *msg = received_msg.msg;
-        char buffer[BLOCK_SIZE] = received_msg.buf;
+        char *buffer = received_msg.buf;
         int param1 = received_msg.param1; // pinum/inum
         int param2 = received_msg.param2;
         int param3 = received_msg.param3;
 
-        if (!IsInoValid(param1, numInode, inode_bitmap)) // check if the inum is valid, not then continue;
+        if (!IsInoValid(param1, numInode, (unsigned int *) inode_bitmap)) // check if the inum is valid, not then continue;
         {
-            respondToServer(reply_msg, -1, sd, &addr, rc);
+            respondToServer(reply_msg, -1, sd, &addr, &rc);
             continue;
         }
 
@@ -320,7 +287,7 @@ int main(int argc, char const *argv[])
 
             int found = lookup(pinum, name, inode_table, data_region, inumPtr);
             found = -1 ? found == 0 : *inumPtr;
-            respondToServer(reply_msg, found, sd, &addr, rc);
+            respondToServer(reply_msg, found, sd, &addr, &rc);
         }
         else if (strcmp(msg, "MFS_Stat") == 0)
         {
@@ -414,7 +381,7 @@ int main(int argc, char const *argv[])
             int offset = param2;
             int nbytes = param3;
 
-            if (nbytes <= 0 || nbytes > BLOCK_SIZE || offset < 0 || offset > BLOCK_SIZE * DIRECT_PTRS || !IsInoValid(inum, numInode, inode_bitmap))
+            if (nbytes <= 0 || nbytes > BLOCK_SIZE || offset < 0 || offset > BLOCK_SIZE * DIRECT_PTRS || !IsInoValid(inum, numInode, (unsigned int *) inode_bitmap))
             {
                 respondToServer(reply_msg, -1, sd, &addr, &rc);
                 continue;
@@ -477,37 +444,39 @@ int main(int argc, char const *argv[])
 
             if (strlen(name) > 28)
             { // check if the pinum is valid
-                respondToServer(reply_msg, -1, sd, &addr, rc);
+                respondToServer(reply_msg, -1, sd, &addr, &rc);
                 continue;
             }
             int *inumPtr;
             if (lookup(pinum, name, inode_table, data_region, inumPtr) == 0)
             {
-                respondToServer(reply_msg, 0, sd, &addr, rc);
+                respondToServer(reply_msg, 0, sd, &addr, &rc);
                 continue;
             }
             inode_t metadata = inode_table[pinum]; // meta data of the file/dir to create
             if (metadata.type == 1)
             { // cannot create a file inside a file
-                respondToServer(reply_msg, -1, sd, &addr, rc);
+                respondToServer(reply_msg, -1, sd, &addr, &rc);
                 continue;
             }
 
             int *emptySlot;
             if (find_empty_set_bitmap((unsigned int *)inode_bitmap, superBlock->num_inodes, emptySlot) == 0)
             { // allocation failure, not enough spot
-                respondToServer(reply_msg, -1, sd, &addr, rc);
+                respondToServer(reply_msg, -1, sd, &addr, &rc);
                 continue;
             }
             if (type == 0)
             { // create a directory
                 inode_table[*emptySlot].size = 2 * sizeof(dir_ent_t);
                 inode_table[*emptySlot].type = 0;
-                if (!findEmptyDataBitmapSlot(data_bitmap, *superBlock, inode_table + *emptySlot, 0))
-                {
-                    respondToServer(reply_msg, -1, sd, &addr, rc);
+                int *emptySlot2;
+                if (find_empty_set_bitmap((unsigned int *)data_bitmap, superBlock->num_data, emptySlot2) == 0)
+                { // allocation failure, not enough spot
+                    respondToServer(reply_msg, -1, sd, &addr, &rc);
                     continue;
                 }
+                inode_table[*emptySlot].direct[0] = *emptySlot2;
                 int datablock_no = inode_table[*emptySlot].direct[0];
                 MFS_DirEnt_t self = {
                     ".", *emptySlot};
@@ -527,7 +496,7 @@ int main(int argc, char const *argv[])
             msync(inode_bitmap, superBlock->inode_bitmap_len * BLOCK_SIZE, MS_SYNC);
             msync(data_bitmap, superBlock->data_bitmap_len * BLOCK_SIZE, MS_SYNC);
             msync(inode_table + *emptySlot, sizeof(inode_t), MS_SYNC);
-            respondToServer(reply_msg, 0, sd, &addr, rc);
+            respondToServer(reply_msg, 0, sd, &addr, &rc);
         }
         else if (strcmp(msg, "MFS_Unlink") == 0)
         {
@@ -539,7 +508,7 @@ int main(int argc, char const *argv[])
             int found = lookup(pinum, name, inode_table, data_region, inumPtr);
             if (found == 0) // not found
             {
-                respondToServer(reply_msg, 0, sd, &addr, rc);
+                respondToServer(reply_msg, 0, sd, &addr, &rc);
                 continue;
             }
             inode_t metadata = inode_table[*inumPtr];
@@ -550,7 +519,7 @@ int main(int argc, char const *argv[])
 
             // parent 删除 name
             inode_t parent = inode_table[pinum];
-            int found = 0;
+            found = 0;
             for (int i = 0; i < DIRECT_PTRS; i++)
             {
                 unsigned int curr = parent.direct[i];
@@ -573,12 +542,12 @@ int main(int argc, char const *argv[])
             }
             // hahahahaha
             msync(image, image_size, MS_SYNC);
-            respondToServer(reply_msg, res, sd, &addr, rc);
+            respondToServer(reply_msg, res, sd, &addr, &rc);
         }
         else if (strcmp(msg, "MFS_Shutdown") == 0)
         {
             msync(image, image_size, MS_SYNC);
-            respondToServer(reply_msg, 0, sd, &addr, rc);
+            respondToServer(reply_msg, 0, sd, &addr, &rc);
             exit(0);
         }
     }
