@@ -20,5 +20,8 @@ clean:
 	${CC} ${CFLAGS} -c $<
 
 tst:
-	gcc fscli.c -o fscli udp.c
-	gcc fsserv.c -o fsserv udp.c
+	gcc -fPIC -g -c -Wall fscli.c -o libmfs
+	gcc -shared -Wl,-soname,libmfs.so -o libmfs.so libmfs -lc
+	gcc fsserv.c -o server
+	rm -f test.img
+	./mkfs -f test.img
