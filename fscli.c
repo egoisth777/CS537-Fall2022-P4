@@ -129,7 +129,7 @@ int sendToServer(int sd, struct timeval tv, message forward_msg, message *receiv
 
 int MFS_Init(char *hostname, int port)
 {
-    int sd = UDP_Open(20001);
+    int sd = UDP_Open(20000);
     
     message forward_msg = {.msg = "MFS_Init"};
     message receive_msg;
@@ -242,8 +242,9 @@ int MFS_Shutdown()
 
 int main(int argc, char const *argv[])
 {
-    printf("Fuck you World!\n");
     MFS_Init("localhost", 3000);
+    // char* name = "testa";
+    // MFS_Creat(0, 1, name);
     sleep(5);
     MFS_Shutdown();
     return 0;
