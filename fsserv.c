@@ -187,7 +187,7 @@ int findNoBlockAlloc(int offset, int nbytes)
  * @return int 
  */
 int 
-lookup(int pinum, char *name, inode_t *inode_table, char *data_region, int *inumPtr)
+lookup(int pinum, char *name, inode_t *inode_table, char *data_region, int *inumPtr, int data_region_addr)
 {
     if (inode_table[pinum].type == 1){ // file should not be passed
         return 0;
@@ -196,15 +196,15 @@ lookup(int pinum, char *name, inode_t *inode_table, char *data_region, int *inum
     int found = 0;
     for (int i = 0; i < DIRECT_PTRS; i++)
     {
-        unsigned int curr = parent.direct[i];
-        if (curr == (unsigned int)(-1)) // the directory is not valid{}
+        if (parent.direct[i] == (unsigned int)(-1)) // the directory is not valid{}
             continue;
+        int curr = parent.direct[i] - data_region_addr;
         char *namePosition = data_region + (BLOCK_SIZE * curr);
         char currName[28];
         for (int j = 0; j < BLOCK_SIZE / sizeof(dir_ent_t); j++)
         {
             memcpy(&currName, namePosition + (j * 32), 28);
-            *inumPtr = *(int *)(namePosition + (j * 32) + 28 * sizeof(char));
+            *inumPtr = *(int *)(namePosition + (j * 32) + 28);
             if (strcmp(currName, name) == 0 && *inumPtr != -1)
             {
                 found = 1;
@@ -348,10 +348,10 @@ int main(int argc, char const *argv[])
             // initialize
             int pinum = param1;
             char *name = received_msg.charParam;
-            int *inumPtr;
+            int inum;
 
-            int found = lookup(pinum, name, inode_table, data_region, inumPtr);
-            found = -1 ? found == 0 : *inumPtr;
+            int found = lookup(pinum, name, inode_table, data_region, &inum, superBlock->data_region_addr);
+            found = -1 ? found == 0 : inum;
             respondToServer(reply_msg, found, sd, &addr, &rc);
         }
         else if (strcmp(msg, "MFS_Stat") == 0)
@@ -506,18 +506,18 @@ int main(int argc, char const *argv[])
             int pinum = param1;
             int type = param2;
             char *name = received_msg.charParam;
-
             if (strlen(name) > 28)
             { // check if the pinum is valid
                 respondToServer(reply_msg, -1, sd, &addr, &rc);
                 continue;
             }
-            int *inumPtr;
-            if (lookup(pinum, name, inode_table, data_region, inumPtr) == 0)
+            int inum;
+            if (lookup(pinum, name, inode_table, data_region, &inum, superBlock->data_region_addr) == 1)
             {
                 respondToServer(reply_msg, 0, sd, &addr, &rc);
                 continue;
             }
+            
             inode_t metadata = inode_table[pinum]; // meta data of the file/dir to create
             if (metadata.type == 1)
             { // cannot create a file inside a file
@@ -553,6 +553,7 @@ int main(int argc, char const *argv[])
             }
             else
             { // create a file
+                printf("stage4 \n");
                 inode_table[*emptySlot].size = 0;
                 inode_table[*emptySlot].type = 1;
                 for (int i = 0; i < DIRECT_PTRS; i++)
@@ -567,20 +568,20 @@ int main(int argc, char const *argv[])
         {
             int pinum = param1;
             char *name = received_msg.charParam;
-            int *inumPtr;
+            int inum;
             int res = -1;
 
-            int found = lookup(pinum, name, inode_table, data_region, inumPtr);
+            int found = lookup(pinum, name, inode_table, data_region, &inum, superBlock->data_region_addr);
             if (found == 0) // not found
             {
                 respondToServer(reply_msg, 0, sd, &addr, &rc);
                 continue;
             }
-            inode_t metadata = inode_table[*inumPtr];
+            inode_t metadata = inode_table[inum];
             if (metadata.type == 1)
-                res = rm_file(*inumPtr, inode_table, data_bitmap, inode_bitmap);
+                res = rm_file(inum, inode_table, data_bitmap, inode_bitmap);
             else
-                res = rm_dir(*inumPtr, inode_table, data_region, data_bitmap, inode_bitmap);
+                res = rm_dir(inum, inode_table, data_region, data_bitmap, inode_bitmap);
 
             // parent 删除 name
             inode_t parent = inode_table[pinum];
