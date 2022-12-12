@@ -194,6 +194,8 @@ lookup(int pinum, char *name, inode_t *inode_table, char *data_region, int *inum
     } 
     inode_t parent = inode_table[pinum];
     int found = 0;
+    int parentSize = parent.size;
+    int currentChecked = 0;
     for (int i = 0; i < DIRECT_PTRS; i++)
     {
         if (parent.direct[i] == (unsigned int)(-1)) // the directory is not valid{}
@@ -201,6 +203,8 @@ lookup(int pinum, char *name, inode_t *inode_table, char *data_region, int *inum
         int curr = parent.direct[i] - data_region_addr;
         char *namePosition = data_region + (BLOCK_SIZE * curr);
         char currName[28];
+        if (currentChecked >= parentSize)
+            break;
         for (int j = 0; j < BLOCK_SIZE / sizeof(dir_ent_t); j++)
         {
             memcpy(&currName, namePosition + (j * 32), 28);
@@ -210,6 +214,7 @@ lookup(int pinum, char *name, inode_t *inode_table, char *data_region, int *inum
                 found = 1;
                 break;
             }
+            currentChecked += sizeof(dir_ent_t);
         }
         if (found == 1)
             break;
@@ -252,7 +257,7 @@ rm_file(int inum, inode_t *inode_table, char* data_bitmap, char* inode_bitmap)
 }
 
 int 
-test_create(int pinum, int type, char* name, inode_t* inode_table, char* data_region, super_t *superBlock, char* inode_bitmap, char* data_bitmap)
+test_create(int pinum, int type, char* name, inode_t* inode_table, char* data_region, super_t *superBlock, char* inode_bitmap, char* data_bitmap, int data_region_start)
 {
     if (strlen(name) > 28)
     { // check if the pinum is valid
@@ -270,24 +275,24 @@ test_create(int pinum, int type, char* name, inode_t* inode_table, char* data_re
         printf("stage 3\n");
     }
 
-    int *emptySlot;
-    if (find_empty_set_bitmap((unsigned int *)inode_bitmap, superBlock->num_inodes, emptySlot) == 0)
+    int emptySlot;
+    if (find_empty_set_bitmap((unsigned int *)inode_bitmap, superBlock->num_inodes, &emptySlot) == 0)
     { // allocation failure, not enough spot
         printf("stage 4\n");
     }
     if (type == 0)
     { // create a directory
-        inode_table[*emptySlot].size = 2 * sizeof(dir_ent_t);
-        inode_table[*emptySlot].type = 0;
-        int *emptySlot2;
-        if (find_empty_set_bitmap((unsigned int *)data_bitmap, superBlock->num_data, emptySlot2) == 0)
+        inode_table[emptySlot].size = 2 * sizeof(dir_ent_t);
+        inode_table[emptySlot].type = 0;
+        int emptySlot2;
+        if (find_empty_set_bitmap((unsigned int *)data_bitmap, superBlock->num_data, &emptySlot2) == 0)
         { // allocation failure, not enough spot
             printf("stage 5\n");
         }
-        inode_table[*emptySlot].direct[0] = *emptySlot2;
-        int datablock_no = inode_table[*emptySlot].direct[0];
+        inode_table[emptySlot].direct[0] = emptySlot2;
+        int datablock_no = inode_table[emptySlot].direct[0];
         MFS_DirEnt_t self = {
-            ".", *emptySlot};
+            ".", emptySlot};
         MFS_DirEnt_t parent = {
             "..", pinum};
         memcpy(data_region + datablock_no * BLOCK_SIZE, &self, sizeof(MFS_DirEnt_t));
@@ -296,14 +301,26 @@ test_create(int pinum, int type, char* name, inode_t* inode_table, char* data_re
     }else
     { // create a file
         printf("stage6 \n");
-        inode_table[*emptySlot].size = 0;
-        inode_table[*emptySlot].type = 1;
+        inode_table[emptySlot].size = 0;
+        inode_table[emptySlot].type = 1;
         for (int i = 0; i < DIRECT_PTRS; i++)
-            inode_table[*emptySlot].direct[i] = (unsigned)-1;
+            inode_table[emptySlot].direct[i] = (unsigned)-1;
     }
+
+    dir_ent_t temp = {.inum = emptySlot};
+    memcpy((char*)&temp, name, 20);
+    temp.name[19] = '\0';
+    int parentSize = metadata.size;
+    int blockNum = parentSize / BLOCK_SIZE;
+    int blockOffset = parentSize % BLOCK_SIZE;
+
+    int curr = metadata.direct[blockNum] - data_region_start;
+    memcpy(data_region + BLOCK_SIZE * curr + blockOffset, &temp, sizeof(dir_ent_t));
+    inode_table[pinum].size = inode_table[pinum].size + sizeof(dir_ent_t);
+
     msync(inode_bitmap, superBlock->inode_bitmap_len * BLOCK_SIZE, MS_SYNC);
     msync(data_bitmap, superBlock->data_bitmap_len * BLOCK_SIZE, MS_SYNC);
-    msync(inode_table + *emptySlot, sizeof(inode_t), MS_SYNC);
+    msync(inode_table + emptySlot, sizeof(inode_t), MS_SYNC);
     printf("stage 7\n");
 }
 
@@ -341,7 +358,7 @@ int main(int argc, char const *argv[])
     int numInode = superBlock->inode_region_len * BLOCK_SIZE / sizeof(inode_t);
 
     int inum;
-    test_create(0, 1, "test", inode_table, data_region, superBlock, inode_bitmap, data_bitmap);
+    test_create(0, 1, "test", inode_table, data_region, superBlock, inode_bitmap, data_bitmap, superBlock->data_region_addr);
     int res = lookup(0, "test", inode_table, data_region, &inum, superBlock->data_region_addr);
     printf("res: %d \n", res);
     // Start the server
