@@ -25,3 +25,11 @@ tst:
 	gcc fsserv.c -o server
 	rm -f test.img
 	./mkfs -f test.img
+
+tst2:
+	gcc fscli.c -o fscli
+	gcc fsserv.c -o fsserv
+	rm -f test.img
+	./mkfs -f test.img
+	fuser -k 20000/udp
+	fuser -k 20001/udp

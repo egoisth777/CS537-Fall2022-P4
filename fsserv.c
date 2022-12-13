@@ -6,7 +6,6 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <math.h>
-#include "mfs.h"
 #include "udp.h"
 #include "ufs.h"
 #include "message.h"
@@ -311,13 +310,13 @@ int MFS_create(int pinum, int type, char *name, inode_t *inode_table, char *data
         }
         inode_table[emptySlot].direct[0] = emptySlot2;
         int datablock_no = inode_table[emptySlot].direct[0];
-        MFS_DirEnt_t self = {
+        dir_ent_t self = {
             ".", emptySlot};
-        MFS_DirEnt_t parent = {
+        dir_ent_t parent = {
             "..", pinum};
-        memcpy(data_region + datablock_no * BLOCK_SIZE, &self, sizeof(MFS_DirEnt_t));
-        memcpy(data_region + datablock_no * BLOCK_SIZE + sizeof(MFS_DirEnt_t), &parent, sizeof(MFS_DirEnt_t));
-        msync(data_region + datablock_no * BLOCK_SIZE, sizeof(MFS_DirEnt_t) * 2, MS_SYNC);
+        memcpy(data_region + datablock_no * BLOCK_SIZE, &self, sizeof(dir_ent_t));
+        memcpy(data_region + datablock_no * BLOCK_SIZE + sizeof(dir_ent_t), &parent, sizeof(dir_ent_t));
+        msync(data_region + datablock_no * BLOCK_SIZE, sizeof(dir_ent_t) * 2, MS_SYNC);
     }
     else
     { // create a file
@@ -364,13 +363,13 @@ int MFS_read(int nbytes, int offset, int inum, inode_t *inode_table, void *image
     unsigned int comparison = -1;
     int no_bytes_to_read_1 = no_block_to_read == 2 ? BLOCK_SIZE - offset : nbytes; // number of bytes to be read from first block
 
-    int startAddrFirstBlockOffset = nbytes % BLOCK_SIZE;                              // startin addr of read in first block
+    int startAddrFirstBlockOffset = offset % BLOCK_SIZE;                              // startin addr of read in first block
     int no_bytes_to_read_2 = no_block_to_read == 1 ? 0 : nbytes - no_bytes_to_read_1; // number of bytes to be read from second block
 
     int locationFirstBlock = offset / BLOCK_SIZE;
-    unsigned locationFirstBlockNum = metadata.direct[locationFirstBlock];
+    int locationFirstBlockNum = metadata.direct[locationFirstBlock];
     int locationSecondBlock = locationFirstBlock + 1; // prove this
-    unsigned locationSecondBlockNum = metadata.direct[locationSecondBlock];
+    int locationSecondBlockNum = metadata.direct[locationSecondBlock];
 
     // Operation on First Block
     int firstBlockAllocated = locationFirstBlockNum == comparison ? 0 : 1;
