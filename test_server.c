@@ -443,8 +443,9 @@ int MFS_write(int nbytes, int offset, int inum, inode_t *inode_table, char *data
     if (firstBlockAllocated == 0)
     {
         firstBlockAllocated = find_empty_set_bitmap((unsigned int *)data_bitmap, superBlock->num_data, &emptySlot);
+        metadata.direct[locationFirstBlock] = emptySlot;
     }
-    metadata.direct[locationFirstBlock] = emptySlot;
+    
     locationFirstBlockNum = metadata.direct[locationFirstBlock];
 
     if (firstBlockAllocated == 0)
@@ -464,9 +465,10 @@ int MFS_write(int nbytes, int offset, int inum, inode_t *inode_table, char *data
         if (secondBlockAllocated == 0)
         {
             secondBlockAllocated = find_empty_set_bitmap((unsigned int *)data_bitmap, superBlock->num_data, &emptySlot);
+            metadata.direct[locationSecondBlock] = emptySlot;
         }
 
-        metadata.direct[locationSecondBlock] = emptySlot;
+        
         locationSecondBlockNum = metadata.direct[locationSecondBlock];
 
         if (secondBlockAllocated == 0)
@@ -535,6 +537,14 @@ MFS_unlink(int pinum, char * name, char * data_region, super_t * superBlock, ino
     return res;
 }
 
+int 
+MFS_stat(message * reply_msg_ptr, inode_t * inode_table, int inum){
+    inode_t metadata = inode_table[inum];
+    reply_msg_ptr->param1 = metadata.size; // size of the inode
+    reply_msg_ptr->param2 = metadata.type; // type of the inode
+    return 0;
+}
+
 int main(int argc, char const *argv[])
 {
     char* const fileImage = "test.img";
@@ -573,6 +583,20 @@ int main(int argc, char const *argv[])
     int found = lookup(0, "test", inode_table, data_region, &inum, superBlock->data_region_addr);
     found = found == -1 ? -1 : inum;
     printf("found: %d\n", found);
+    
+    message temp0;
+    MFS_stat(&temp0, inode_table, 0);
+
+    message temp;
+    int res_stats = MFS_stat(&temp, inode_table, 1);
+    printf("message size: %d type: %d \n", temp.param1, temp.param2);
+
+    char buf1[BLOCK_SIZE];
+    int res_w = MFS_write(BLOCK_SIZE, 0, 1, inode_table, data_bitmap, inode_bitmap, buf1, superBlock, image);
+
+    message temp2;
+    int res_stats2 = MFS_stat(&temp2, inode_table, 1);
+    printf("message size: %d type: %d \n", temp2.param1, temp2.param2);
     // Start the server
     return 0;
 }

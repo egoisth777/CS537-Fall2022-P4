@@ -199,6 +199,7 @@ int MFS_Stat(int inum, MFS_Stat_t *m)
         return msg_code;
     m->size = received_msg.param1;
     m->type = received_msg.param2;
+    printf("inum:%d, msize: %d, mtype: %d\n", inum, m->size, m->type);
     return msg_code;
 }
 int MFS_Write(int inum, char *buffer, int offset, int nbytes)

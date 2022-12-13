@@ -443,8 +443,9 @@ int MFS_write(int nbytes, int offset, int inum, inode_t *inode_table, char *data
     if (firstBlockAllocated == 0)
     {
         firstBlockAllocated = find_empty_set_bitmap((unsigned int *)data_bitmap, superBlock->num_data, &emptySlot);
+        metadata.direct[locationFirstBlock] = emptySlot;
     }
-    metadata.direct[locationFirstBlock] = emptySlot;
+    
     locationFirstBlockNum = metadata.direct[locationFirstBlock];
 
     if (firstBlockAllocated == 0)
@@ -464,9 +465,10 @@ int MFS_write(int nbytes, int offset, int inum, inode_t *inode_table, char *data
         if (secondBlockAllocated == 0)
         {
             secondBlockAllocated = find_empty_set_bitmap((unsigned int *)data_bitmap, superBlock->num_data, &emptySlot);
+            metadata.direct[locationSecondBlock] = emptySlot;
         }
 
-        metadata.direct[locationSecondBlock] = emptySlot;
+        
         locationSecondBlockNum = metadata.direct[locationSecondBlock];
 
         if (secondBlockAllocated == 0)
@@ -535,8 +537,18 @@ MFS_unlink(int pinum, char * name, char * data_region, super_t * superBlock, ino
     return res;
 }
 
+int 
+MFS_stat(message * reply_msg_ptr, inode_t * inode_table, int inum){
+
+    inode_t metadata = inode_table[inum];
+    reply_msg_ptr->param1 = metadata.size; // size of the inode
+    reply_msg_ptr->param2 = metadata.type; // type of the inode
+    return 0;
+}
+
 int main(int argc, char const *argv[])
 {
+    printf("Hello From Server \n");
     // Get length of the argument
     int length = 0;
     char const *curr = argv[0];
@@ -622,7 +634,6 @@ int main(int argc, char const *argv[])
             respondToServer(reply_msg, -1, sd, &addr, &rc);
             continue;
         }
-
         // process by case according to the msg field
         if (strcmp(msg, "MFS_Init") == 0) // Initialization
         {
@@ -637,10 +648,8 @@ int main(int argc, char const *argv[])
         }
         else if (strcmp(msg, "MFS_Stat") == 0)
         {
-            inode_t metadata = inode_table[param1];
-            reply_msg.param1 = metadata.size; // size of the inode
-            reply_msg.param2 = metadata.type; // type of the inode
-            respondToServer(reply_msg, 0, sd, &addr, &rc);
+            int res = MFS_stat(&reply_msg, inode_table, param1);
+            respondToServer(reply_msg, res, sd, &addr, &rc);
         }
         else if (strcmp(msg, "MFS_Write") == 0)
         {
