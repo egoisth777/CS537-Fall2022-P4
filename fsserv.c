@@ -181,6 +181,8 @@ void respondToServer(message reply, int replyNum, int sd, struct sockaddr_in *ad
 
 int findNoBlockAlloc(int offset, int nbytes)
 {
+    if (offset % BLOCK_SIZE == 0 && nbytes <= 4096)
+        return 1;
     return offset / BLOCK_SIZE == (offset + nbytes) / BLOCK_SIZE ? 1 : 2;
 }
 
@@ -414,7 +416,7 @@ int MFS_read(int nbytes, int offset, int inum, inode_t *inode_table, void *image
 int MFS_write(int nbytes, int offset, int inum, inode_t *inode_table, char *data_bitmap, char *inode_bitmap, char *buffer, super_t *superBlock, void *image)
 {
     // precheck
-    if (nbytes <= 0 || nbytes > BLOCK_SIZE || offset < 0 || offset + nbytes >= BLOCK_SIZE * DIRECT_PTRS)
+    if (nbytes <= 0 || nbytes > BLOCK_SIZE || offset < 0 || offset + nbytes > BLOCK_SIZE * DIRECT_PTRS)
     {
         return -1;
     }
