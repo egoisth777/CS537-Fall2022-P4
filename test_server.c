@@ -181,6 +181,8 @@ void respondToServer(message reply, int replyNum, int sd, struct sockaddr_in *ad
 
 int findNoBlockAlloc(int offset, int nbytes)
 {
+    if (offset % BLOCK_SIZE == 0 && nbytes <= 4096)
+        return 1;
     return offset / BLOCK_SIZE == (offset + nbytes) / BLOCK_SIZE ? 1 : 2;
 }
 
@@ -414,7 +416,7 @@ int MFS_read(int nbytes, int offset, int inum, inode_t *inode_table, void *image
 int MFS_write(int nbytes, int offset, int inum, inode_t *inode_table, char *data_bitmap, char *inode_bitmap, char *buffer, super_t *superBlock, void *image)
 {
     // precheck
-    if (nbytes <= 0 || nbytes > BLOCK_SIZE || offset < 0 || offset + nbytes >= BLOCK_SIZE * DIRECT_PTRS)
+    if (nbytes <= 0 || nbytes > BLOCK_SIZE || offset < 0 || offset + nbytes > BLOCK_SIZE * DIRECT_PTRS)
     {
         return -1;
     }
@@ -591,8 +593,33 @@ int main(int argc, char const *argv[])
     int res_stats = MFS_stat(&temp, inode_table, 1);
     printf("message size: %d type: %d \n", temp.param1, temp.param2);
 
-    char buf1[BLOCK_SIZE];
-    int res_w = MFS_write(BLOCK_SIZE, 0, 1, inode_table, data_bitmap, inode_bitmap, buf1, superBlock, image);
+    for(int i = 0; i < 31; i ++)
+    {
+        char buf[BLOCK_SIZE];
+        if (i == 30)
+        {
+            printf("test\n");
+        }
+        int res_w = MFS_write(BLOCK_SIZE, 0 + i * BLOCK_SIZE, 1, inode_table, data_bitmap, inode_bitmap, buf, superBlock, image);
+        if (i == 30)
+        {
+            printf("res_w = %d\n", res_w);
+        }
+    }
+    
+    for(int i = 0; i < 31; i ++)
+    {
+        if (i == 30)
+        {
+            printf("test\n");
+        }
+        char buf[BLOCK_SIZE];
+        int res_w = MFS_read(BLOCK_SIZE, 0 + i * BLOCK_SIZE, 1, inode_table, image, superBlock, buf);
+        if (i == 30)
+        {
+            printf("res_w = %d\n", res_w);
+        }
+    }
 
     message temp2;
     int res_stats2 = MFS_stat(&temp2, inode_table, 1);
