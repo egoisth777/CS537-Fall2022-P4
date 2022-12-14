@@ -236,7 +236,7 @@ int rm_dir(int inum, inode_t *inode_table, char *data_region, char *data_bitmap,
 {
     inode_t metadata = inode_table[inum];
     int size = metadata.size;
-    if (size >= 2 * sizeof(dir_ent_t))
+    if (size > 2 * sizeof(dir_ent_t))
         return -1;
     for (int i = 0; i < DIRECT_PTRS; i++)
     {
@@ -310,8 +310,8 @@ int MFS_create(int pinum, int type, char *name, inode_t *inode_table, char *data
         { // allocation failure, not enough spot
             return -1;
         }
-        inode_table[emptySlot].direct[0] = emptySlot2;
-        int datablock_no = inode_table[emptySlot].direct[0];
+        inode_table[emptySlot].direct[0] = emptySlot2 + superBlock->data_region_addr;
+        int datablock_no = emptySlot2;
         dir_ent_t self = {
             ".", emptySlot};
         dir_ent_t parent = {
@@ -347,7 +347,7 @@ int MFS_create(int pinum, int type, char *name, inode_t *inode_table, char *data
 
 int MFS_read(int nbytes, int offset, int inum, inode_t *inode_table, void *image, super_t *superBlock, char *buffer)
 {
-    if (nbytes <= 0 || nbytes > BLOCK_SIZE || offset < 0 || offset > BLOCK_SIZE * DIRECT_PTRS)
+    if (nbytes <= 0 || nbytes > BLOCK_SIZE || offset < 0 || offset + nbytes > BLOCK_SIZE * DIRECT_PTRS)
     {
         return -1;
     }
@@ -510,7 +510,8 @@ MFS_unlink(int pinum, char * name, char * data_region, super_t * superBlock, ino
         res = rm_file(inum, inode_table, data_bitmap, inode_bitmap);
     else
         res = rm_dir(inum, inode_table, data_region, data_bitmap, inode_bitmap);
-
+    if (res == -1)
+        return res;
     // parent 删除 name
     inode_t parent = inode_table[pinum];
     found = 0;
@@ -519,7 +520,7 @@ MFS_unlink(int pinum, char * name, char * data_region, super_t * superBlock, ino
         unsigned int curr = parent.direct[i];
         if (curr == (unsigned int)(-1)) // the directory is not valid{}
             continue;
-        char *namePosition = data_region + (BLOCK_SIZE * curr);
+        char *namePosition = data_region + (BLOCK_SIZE * (curr - superBlock->data_region_addr)) ;
         char currName[28];
         for (int j = 0; j < BLOCK_SIZE / sizeof(dir_ent_t); j++)
         {
@@ -533,6 +534,10 @@ MFS_unlink(int pinum, char * name, char * data_region, super_t * superBlock, ino
         }
         if (found == 1)
             break;
+    }
+    if (res != -1) {
+        parent.size -= sizeof(dir_ent_t);
+        memcpy(inode_table + pinum, &metadata, sizeof(dir_ent_t));
     }
     // hahahahaha
     msync(image, image_size, MS_SYNC);
@@ -643,10 +648,17 @@ int main(int argc, char const *argv[])
         }
         else if (strcmp(msg, "MFS_Lookup") == 0)
         {
-            int inum;
-            int found = lookup(param1, received_msg.charParam, inode_table, data_region, &inum, superBlock->data_region_addr);
-            found = found == -1 ? -1 : inum;
-            respondToServer(reply_msg, found, sd, &addr, &rc);
+            inode_t *metadata = inode_table + param1;
+            if (metadata->type == 1)
+                respondToServer(reply_msg, -1, sd, &addr, &rc); // cannot look up in a file
+            else {
+                int inum;
+                int found = lookup(param1, received_msg.charParam, inode_table, data_region, &inum, superBlock->data_region_addr);
+                found = found == 0 ? -1 : inum;
+                
+                respondToServer(reply_msg, found, sd, &addr, &rc);
+            }
+            
         }
         else if (strcmp(msg, "MFS_Stat") == 0)
         {
@@ -661,8 +673,9 @@ int main(int argc, char const *argv[])
         }
         else if (strcmp(msg, "MFS_Read") == 0)
         {
-            char *buffer = reply_msg.buf;
+            char buffer[4096];
             int res = MFS_read(param3, param2, param1, inode_table, image, superBlock, buffer);
+            memcpy(reply_msg.buf, buffer, BLOCK_SIZE);
             respondToServer(reply_msg, res, sd, &addr, &rc);
         }
         else if (strcmp(msg, "MFS_Creat") == 0)
