@@ -378,7 +378,7 @@ int MFS_read(int nbytes, int offset, int inum, inode_t *inode_table, void *image
         return -1;
     }
 
-    char *startAddr = image + BLOCK_SIZE * locationFirstBlockNum + startAddrFirstBlockOffset;
+    char *startAddr = image + superBlock->data_region_addr * BLOCK_SIZE + BLOCK_SIZE * locationFirstBlockNum + startAddrFirstBlockOffset;
     // Read
     memcpy(buffer, startAddr, no_bytes_to_read_1);
 
@@ -390,7 +390,7 @@ int MFS_read(int nbytes, int offset, int inum, inode_t *inode_table, void *image
         {
             return -1;
         }
-        char *startAddr2 = image + BLOCK_SIZE * locationSecondBlockNum;
+        char *startAddr2 = image + superBlock->data_region_addr * BLOCK_SIZE + BLOCK_SIZE * locationSecondBlockNum;
         // Read
         memcpy(buffer + no_bytes_to_read_1, startAddr2, no_bytes_to_read_2);
     }
@@ -453,7 +453,7 @@ int MFS_write(int nbytes, int offset, int inum, inode_t *inode_table, char *data
         return -1;
     }
 
-    char *startAddr = image + BLOCK_SIZE * locationFirstBlockNum + startAddrFirstBlockOffset;
+    char *startAddr = image + superBlock->data_region_addr * BLOCK_SIZE + BLOCK_SIZE * locationFirstBlockNum + startAddrFirstBlockOffset;
     // Write to persistency file
     memcpy(startAddr, buffer, numByteToWriteFirstBlock);
     msync(startAddr, numByteToWriteFirstBlock, MS_SYNC);
@@ -476,7 +476,7 @@ int MFS_write(int nbytes, int offset, int inum, inode_t *inode_table, char *data
             return -1;
         }
 
-        char *startAddr2 = image + BLOCK_SIZE * locationSecondBlockNum;
+        char *startAddr2 = image + superBlock->data_region_addr * BLOCK_SIZE + BLOCK_SIZE * locationSecondBlockNum;
         // Write to persistency file
         memcpy(startAddr2, buffer, numByteToWriteSecondBlock);
         msync(startAddr2, numByteToWriteSecondBlock, MS_SYNC);

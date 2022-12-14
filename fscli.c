@@ -105,6 +105,7 @@ int sendToServer(int sd, struct timeval tv, message forward_msg, message *receiv
         rc = UDP_Write(sd, &addrSnd, (char*)&forward_msg, BUFFER_SIZE);
         if (rc < 0) {
             printf("client:: failed to send\n");
+            sleep(5);
             continue;
         }
         printf("client:: wait for reply...\n");
@@ -129,7 +130,7 @@ int sendToServer(int sd, struct timeval tv, message forward_msg, message *receiv
 
 int MFS_Init(char *hostname, int port)
 {
-    int sd = UDP_Open(20000);
+    int sd = UDP_Open(20001);
     
     message forward_msg = {.msg = "MFS_Init"};
     message receive_msg;
@@ -151,6 +152,7 @@ int MFS_Init(char *hostname, int port)
         rc = UDP_Write(sd, &addrSnd, (char*)&forward_msg, BUFFER_SIZE);
         if (rc < 0) {
             printf("client:: failed to send\n");
+            sleep(5);
             continue;
         }
         printf("client:: wait for reply...\n");
