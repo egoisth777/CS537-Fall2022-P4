@@ -694,6 +694,7 @@ int main(int argc, char const *argv[])
         {
             msync(image, image_size, MS_SYNC);
             respondToServer(reply_msg, 0, sd, &addr, &rc);
+            UDP_Close(sd);
             exit(0);
         }
     }
