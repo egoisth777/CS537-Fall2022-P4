@@ -130,9 +130,11 @@ int sendToServer(int sd, struct timeval tv, message forward_msg, message *receiv
 
 int MFS_Init(char *hostname, int port)
 {
-    int sd = s_descriptor;
-    if (sd == -1)
-    	sd = UDP_Open(5489);
+    int sd = -1;
+    while (sd <= -1) {
+        int porta = rand() % 20001;
+        sd = UDP_Open(porta);
+    }
     
     message forward_msg = {.msg = "MFS_Init"};
     message receive_msg;
