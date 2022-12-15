@@ -111,6 +111,10 @@ int sendToServer(int sd, struct timeval tv, message forward_msg, message *receiv
         printf("client:: wait for reply...\n");
         printf("sd = %d\n", sd);
         res = select(sd + 1, &rd, NULL, NULL, &tv);
+        if (res <= 0) {
+            printf("fd is not set - err / timeout\n");
+            continue;
+        }
         rc = UDP_Read(sd, &addrRcv, (char*)received_msg, BUFFER_SIZE);
         
         printf("res: %d\n, rc = %d \n", res, rc);
@@ -130,7 +134,12 @@ int sendToServer(int sd, struct timeval tv, message forward_msg, message *receiv
 
 int MFS_Init(char *hostname, int port)
 {
-    int sd = -1;
+    int sd = s_descriptor;
+    if (sd > 0) {
+        UDP_Close(sd);
+        sd = -1;
+        s_descriptor = -1;
+    }
     while (sd <= -1) {
         int porta = rand() % 20001;
         sd = UDP_Open(porta);
@@ -163,8 +172,12 @@ int MFS_Init(char *hostname, int port)
         printf("sd = %d\n", sd);
 
         res = select(sd + 1, &rd, NULL, NULL, &tv);
+        if (res <= 0) {
+            printf("fd is not set - err / timeout\n");
+            continue;
+        }
         rc = UDP_Read(sd, &addrRcv, (char*)&receive_msg, BUFFER_SIZE);
-        
+        // res = select(sd + 1, &rd, NULL, NULL, &tv);
         printf("res: %d, rc = %d \n", res, rc);
         if (rc < 0) {
             printf("client:: failed to operate\n");
