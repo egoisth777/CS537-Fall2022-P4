@@ -141,7 +141,7 @@ void set_bit_zero(unsigned int *bitmap, int position)
 int find_empty_set_bitmap(unsigned int *bitmap, int size, int *emptySlot)
 {
     int allocated = 0;
-    for (int i = 0; i < size; i++)
+    for (int i = 0; i <= size; i++)
     {
         if (get_bit(bitmap, i) == 0)
         {                       // find empty slot

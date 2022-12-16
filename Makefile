@@ -25,6 +25,7 @@ tst:
 	gcc fsserv.c -o server
 	rm -f test.img
 	./mkfs -f test.img
+	/home/cs537-1/tests/p4/Python-2.7.1/python  /home/cs537-1/tests/p4/p4-test/project4.py
 
 tst2:
 	gcc fscli.c -o fscli
