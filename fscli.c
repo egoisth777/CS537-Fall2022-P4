@@ -135,11 +135,6 @@ int sendToServer(int sd, struct timeval tv, message forward_msg, message *receiv
 int MFS_Init(char *hostname, int port)
 {
     int sd = s_descriptor;
-    if (sd > 0) {
-        UDP_Close(sd);
-        sd = -1;
-        s_descriptor = -1;
-    }
     while (sd <= -1) {
         int porta = rand() % 20001;
         sd = UDP_Open(porta);
@@ -257,7 +252,12 @@ int MFS_Shutdown()
 {
     message forward_msg = {.msg = "MFS_Shutdown"};
     message received_msg;
-    return sendToServer(s_descriptor, tv, forward_msg, &received_msg, addrSnd, addrRcv);
+    int res = sendToServer(s_descriptor, tv, forward_msg, &received_msg, addrSnd, addrRcv);
+    if (res == 0) {
+        UDP_Close(s_descriptor);
+        s_descriptor = -1;
+    }
+    return res;
 }
 
 int main(int argc, char const *argv[])
